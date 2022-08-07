@@ -1,0 +1,47 @@
+env:
+  # Most of the code here will not be for the browser; use overrides to indicate
+  # browser code.
+  browser: false
+  node: true
+
+extends:
+  - 'plugin:workspaces/recommended'
+  - 'plugin:@ianwremmel/ianwremmel/modern'
+  - 'plugin:@ianwremmel/ianwremmel/typescript'
+  - 'prettier'
+
+ignorePatterns:
+  - dist
+
+overrides:
+  - files:
+      - '**/*.ts'
+      - '**/*.tsx'
+    parserOptions:
+      sourceType: module
+
+  - files:
+      - '**/*.spec.*'
+      - 'test/jest/spec/**/*'
+      - '**/__mocks__/**/*'
+    env:
+      jest: true
+
+parserOptions:
+  sourceType: 'script'
+
+plugins:
+  - workspaces
+
+settings:
+  react:
+    version: 'detect'
+  import/internal-regex: '^@beacon/'
+
+rules:
+  import/no-extraneous-dependencies:
+    - error
+    - devDependencies:
+        - '!src/**/*'
+        - '!packages/**/*'
+  workspaces/no-relative-imports: 'error'

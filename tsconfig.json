@@ -1,0 +1,33 @@
+{
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": true,
+    "declaration": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "jsx": "react",
+    "lib": [
+      "dom",
+      "es2021"
+    ],
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "outDir": "dist/types",
+    "resolveJsonModule": true,
+    "strict": true,
+    "target": "es2021", // Node 16.0.0 and later
+    "types": [
+      "node"
+    ]
+  },
+  "include": [
+    "*.ts",
+    "*.tsx",
+    "*.js",
+    "*.jsx",
+    "packages/*/*/src/**/*.js",
+    "packages/*/*/src/**/*.jsx",
+    "packages/*/*/src/**/*.ts",
+    "packages/*/*/src/**/*.tsx",
+  ]
+}

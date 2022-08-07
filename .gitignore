@@ -1,4 +1,7 @@
 node_modules
 
+# Ignore reports generated for CI
+reports
+
 # Ignore editor config directories
 .idea
