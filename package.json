@@ -1,0 +1,16 @@
+{
+  "name": "beacon",
+  "version": "0.0.0-development",
+  "description": "A toy project to demonstrate things I learned building [Check Run Reporter](https://www.check-run-reporter.com)",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "engines": {
+    "node": "16.x",
+    "npm": "8.x"
+  },
+  "keywords": [],
+  "author": "Ian Remmel <1182361+ianwremmel@users.noreply.github.com>",
+  "license": "MIT",
+  "private": true
+}
