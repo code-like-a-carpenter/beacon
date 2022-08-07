@@ -3,3 +3,16 @@
 
 # Lint staged files
 npx --no-install lint-staged
+
+# Make sure the readme TOC is up to date
+if ! git diff --exit-code README.md; then
+  echo 'README.md has unstaged changes. Please stage or stash them before committing'
+  exit 1
+fi
+
+# At this point, we know there are no unstaged README changes, so only
+# regenerate the toc if there are staged changes.
+if ! git diff --staged --exit-code README.md; then
+  make README.md
+  git add README.md
+fi
