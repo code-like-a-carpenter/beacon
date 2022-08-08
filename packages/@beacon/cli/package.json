@@ -2,6 +2,8 @@
   "name": "@beacon/cli",
   "main": "src/index.ts",
   "dependencies": {
+    "@beacon/cli-cli-deps": "*",
+    "@beacon/cli-deps": "*",
     "yargs": "^17.5.1"
   },
   "devDependencies": {

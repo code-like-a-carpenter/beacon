@@ -7,6 +7,8 @@
     "eslint": "eslint ${ESLINT_FORMAT_OPTIONS:-} --ignore-path .gitignore ",
     "lint": "npm-run-all --continue-on-error --parallel lint:*",
     "lint:changelog": "commitlint --from origin/main --to HEAD",
+    "lint:deps": "npm run cli -- deps --dry-run",
+    "lint:cli-deps": "npm run cli -- cli-deps --dry-run",
     "lint:es": "npm run --silent eslint -- .",
     "prelint:types": "mkdir --parents reports/style",
     "lint:types": "bash -c \"tsc $TSC_OPTIONS\"",
