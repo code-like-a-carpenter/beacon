@@ -45,3 +45,4 @@ rules:
         - '!src/**/*'
         - '!packages/**/*'
   workspaces/no-relative-imports: 'error'
+  require-jsdoc: off
