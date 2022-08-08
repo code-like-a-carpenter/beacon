@@ -1,5 +1,5 @@
 on: push
-name: lint
+name: validate
 jobs:
   # fixup:
   #   runs-on: ubuntu-latest
@@ -51,3 +51,29 @@ jobs:
           token: '1a626bae-dbc9-4f82-9848-f71dd5be9ae6'
           label: TSC
           report: 'reports/style/tsc.log'
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+      - uses: actions/cache@v2.1.4
+        env:
+          cache-name: cache-node-modules
+        with:
+          # npm cache files are stored in `~/.npm` on Linux/macOS
+          path: ~/.npm
+          key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-build-${{ env.cache-name }}-
+            ${{ runner.os }}-build-
+            ${{ runner.os }}-
+      - run: npm ci
+      - run: npm test
+      - uses: check-run-reporter/action@v2.7.1
+        if: ${{ always() }}
+        with:
+          token: '1a626bae-dbc9-4f82-9848-f71dd5be9ae6'
+          label: Unit Tests
+          report: 'reports/junit/**/*.xml'
