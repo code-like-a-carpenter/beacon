@@ -17,6 +17,7 @@
     "strict": true,
     "target": "es2021", // Node 16.0.0 and later
     "types": [
+      "jest",
       "node"
     ]
   },
