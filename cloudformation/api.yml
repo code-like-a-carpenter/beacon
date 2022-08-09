@@ -1,0 +1,41 @@
+openapi: 3.0.3
+info:
+  version: 1.0.0
+  title: Beacon
+  description: A toy project to demonstrate things I learned building [Check Run Reporter](https://www.check-run-reporter.com)
+
+paths:
+  /api/v1/ping:
+    get:
+      operationId: ping
+      description: Ping
+      responses:
+        '200':
+          description: ok
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PingResponse'
+      x-amazon-apigateway-integration:
+        type: 'aws_proxy'
+        httpMethod: 'POST'
+        uri:
+          Fn::Sub: 'arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${FnPing.Arn}/invocations'
+        passThroughBehavior: NEVER
+
+x-amazon-apigateway-request-validator: all
+
+x-amazon-apigateway-request-validators:
+  all:
+    validateRequestBody: true
+    validateRequestParameters: true
+
+components:
+  schemas:
+    PingResponse:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+        - status
