@@ -60,6 +60,9 @@ print-%:
 ## Targets
 ###############################################################################
 
+packages/@beacon/gateway-schema/src/__generated__/index.ts: cloudformation/api.yml
+	$(NPX) openapi-typescript $< --prettier-config ./.prettierrc --output $@
+
 README.md:
 	$(NPX) markdown-toc -i --bullets='-' --maxdepth=3 README.md
 	# TODO $(NPX) prettier --write README.md
