@@ -3,6 +3,7 @@
   "main": "src/index.ts",
   "dependencies": {
     "@beacon/cli-cli-deps": "*",
+    "@beacon/cli-compute-deps-for-package": "*",
     "@beacon/cli-deps": "*",
     "yargs": "^17.5.1"
   },

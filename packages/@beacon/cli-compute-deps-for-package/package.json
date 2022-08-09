@@ -1,0 +1,8 @@
+{
+  "name": "@beacon/cli-compute-deps-for-package",
+  "main": "./src/index.ts",
+  "dependencies": {
+    "glob": "^8.0.3",
+    "yargs": "^17.5.1"
+  }
+}
