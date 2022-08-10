@@ -1,0 +1,12 @@
+{
+  "name": "@beacon/handle-http",
+  "main": "src/index.ts",
+  "dependencies": {
+    "@beacon/gateway-schema": "*",
+    "@beacon/logger": "*",
+    "@remix-run/web-fetch": "^4.2.0"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.101"
+  }
+}
