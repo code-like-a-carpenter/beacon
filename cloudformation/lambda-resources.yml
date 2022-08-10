@@ -1,0 +1,198 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: 'AWS::Serverless-2016-10-31'
+
+Description: |
+  Commons resources for Lambda functions. Ideally, the lambda itself would be
+  defined in the same file, but the SAM transform breaks if we don't define
+  all AWS::Serverless::Function resources in the same file as their
+  AWS::Serverless::Api
+
+Parameters:
+  Api:
+    Default: AWS::NoValue
+    Type: String
+
+  FunctionName:
+    Type: String
+    Description: Name of the Lambda function
+
+  FunctionBaseName:
+    Type: String
+
+  HighMemThreshold:
+    Type: Number
+    Default: 80
+
+  HttpMethod:
+    Default: AWS::NoValue
+    Type: String
+
+  HttpPath:
+    Default: AWS::NoValue
+    Type: String
+
+  LambdaLatencyP99Threshold:
+    Type: Number
+    Description: The Lambda latency p99 threshold.
+
+  LambdaLatencyP95Threshold:
+    Type: Number
+    Description: The Lambda latency p95 threshold.
+
+  LogRetention:
+    Type: Number
+    Description: The number of days to retain logs.
+
+  StageName:
+    Type: String
+
+  Topic:
+    Type: String
+    Description: Name of the PagerDuty SNS Topic
+
+Conditions:
+  CreateAlarms: !Equals
+    - !Ref StageName
+    - 'production'
+
+Resources:
+  ##############################################################################
+  # Endpoints
+  ##############################################################################
+
+  Permission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: 'lambda:InvokeFunction'
+      FunctionName: !Ref FunctionName
+      Principal: 'apigateway.amazonaws.com'
+      SourceArn: !Sub
+        - 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${Api}/*/${HttpMethod}/${HttpPath}'
+        - HttpMethod: !Ref HttpMethod
+          HttpPath: !Ref HttpPath
+          Api: !Ref Api
+
+  ##############################################################################
+  # Logs
+  ##############################################################################
+
+  LogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${FunctionName}
+      RetentionInDays: !Ref LogRetention
+
+  LogQuery:
+    Type: AWS::Logs::QueryDefinition
+    Properties:
+      LogGroupNames:
+        - !Ref LogGroup
+      Name: !Sub
+        - ${FunctionName}
+        - FunctionName: !Ref FunctionName
+      QueryString: |
+          fields @timestamp, level, message, name, stack, path, method, @requestId, @message
+          | sort @timestamp desc
+          | limit 50
+
+  ##############################################################################
+  # Common Alarms
+  ##############################################################################
+
+  LambdaLatencyP99:
+    Type: AWS::CloudWatch::Alarm
+    Condition: CreateAlarms
+    Properties:
+      AlarmActions:
+        - !Ref Topic
+      OKActions:
+        - !Ref Topic
+      AlarmDescription: !Sub High latency for ${FunctionBaseName}
+      AlarmName: !Sub /aws/lambda/high-latency-P99/${FunctionBaseName}
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref FunctionName
+        - Name: Resource
+          Value: !Ref FunctionName
+      EvaluationPeriods: 2
+      ExtendedStatistic: p99
+      MetricName: Duration
+      Namespace: AWS/Lambda
+      Period: 60
+      Threshold: !Ref LambdaLatencyP99Threshold
+      TreatMissingData: notBreaching
+
+  LambdaLatencyP95:
+    Type: AWS::CloudWatch::Alarm
+    Condition: CreateAlarms
+    Properties:
+      AlarmActions:
+        - !Ref Topic
+      OKActions:
+        - !Ref Topic
+      AlarmDescription: !Sub High latency for ${FunctionBaseName}
+      AlarmName: !Sub /aws/lambda/high-latency-P95/${FunctionBaseName}
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref FunctionName
+        - Name: Resource
+          Value: !Ref FunctionName
+      EvaluationPeriods: 2
+      ExtendedStatistic: p95
+      MetricName: Duration
+      Namespace: AWS/Lambda
+      Period: 60
+      Threshold: !Ref LambdaLatencyP95Threshold
+      TreatMissingData: notBreaching
+
+  LambdaMemoryHigh:
+    Type: AWS::CloudWatch::Alarm
+    Condition: CreateAlarms
+    Properties:
+      AlarmActions:
+        - !Ref Topic
+      OKActions:
+        - !Ref Topic
+      AlarmDescription:
+        !Sub Memory usage above ${HighMemThreshold}% for ${FunctionBaseName}
+      AlarmName: !Sub /aws/lambda/high-memory/${FunctionBaseName}
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: function_name
+          Value: !Ref FunctionName
+      EvaluationPeriods: 1
+      MetricName: memory_utilization
+      Namespace: LambdaInsights
+      Period: 60
+      Statistic: Maximum
+      Threshold: !Ref HighMemThreshold
+      TreatMissingData: notBreaching
+
+  # Ideally, this would be a math-based alarm, but CloudFormation didn't accept
+  # anything I tried, so we can just alert every time there's an error and
+  # refine it later
+  ErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: CreateAlarms
+    Properties:
+      AlarmActions:
+        - !Ref Topic
+      OKActions:
+        - !Ref Topic
+      AlarmDescription: !Sub Error detected for ${FunctionBaseName}
+      AlarmName: !Sub /aws/lambda/error-count/${FunctionBaseName}
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      EvaluationPeriods: 1
+      Namespace: 'AWS/Lambda'
+      MetricName: 'Errors'
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref FunctionName
+        - Name: Resource
+          Value: !Ref FunctionName
+      Period: 60
+      Statistic: Maximum
+      Threshold: 1
+      TreatMissingData: notBreaching

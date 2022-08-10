@@ -1,5 +1,9 @@
 node_modules
 
+# Ignore build output
+.aws-sam
+.tmp
+
 # Ignore reports generated for CI
 reports
 

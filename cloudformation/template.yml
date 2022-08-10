@@ -1,0 +1,123 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: 'AWS::Serverless-2016-10-31'
+
+Parameters:
+  LogRetention:
+    Type: Number
+    Default: '3'
+    Description: Duration in days to retain logs
+
+  StageName:
+    Type: String
+    Description: Name of API stage.
+
+  Subdomain:
+    Default: serverless
+    Type: String
+
+  SHA:
+    Type: String
+
+Outputs:
+  ApiUrl:
+    Value: !Sub 'https://${Api}.execute-api.${AWS::Region}.amazonaws.com/${StageName}/'
+
+  LogBucket:
+    Value: !Ref LogBucket
+
+Conditions:
+  IsDev: !Equals
+    - !Ref StageName
+    - development
+
+Globals:
+  Function:
+    Environment:
+      Variables:
+        NODE_ENV: 'production'
+        NODE_OPTIONS: '--trace-warnings'
+        SHA: !Ref SHA
+        STAGE_NAME: !Ref StageName
+    Handler: index.handler
+    Layers:
+      - !Sub 'arn:aws:lambda:${AWS::Region}:580247275435:layer:LambdaInsightsExtension:16'
+    MemorySize: 128
+    Runtime: nodejs16.x
+    Tracing: Active
+    Timeout: 30
+
+Resources:
+  Api:
+    Type: AWS::Serverless::Api
+    Properties:
+      # Note: need to use DefinitionBody with Fn::Transform rather than
+      # DefinitionUri so that we can use CloudFormation variables in api.yml
+      DefinitionBody:
+        Fn::Transform:
+          Name: AWS::Include
+          Parameters:
+            Location: api.yml
+      StageName: !Ref StageName
+      TracingEnabled: true
+      AccessLogSetting:
+        DestinationArn: !GetAtt AccessLogGroup.Arn
+        Format: '{"requestTime":"$context.requestTime","requestId":"$context.requestId","httpMethod":"$context.httpMethod","path":"$context.path","resourcePath":"$context.resourcePath","status":$context.status,"responseLatency":$context.responseLatency,"xrayTraceId":"$context.xrayTraceId","integrationRequestId":"$context.integration.requestId","functionResponseStatus":"$context.integration.status","integrationLatency":"$context.integration.latency","integrationServiceStatus":"$context.integration.integrationStatus","ip":"$context.identity.sourceIp","userAgent":"$context.identity.userAgent"}'
+      MethodSettings:
+        - HttpMethod: '*'
+          # These logs are super noisy and not very useful _most_ of the time.
+          # We keep them on in dev because that's where we're most likely to be
+          # in a broken state that would make them useful.
+          LoggingLevel: !If
+            - IsDev
+            - 'INFO'
+            - 'OFF'
+          MetricsEnabled: true
+          ResourcePath: '/*'
+
+  AccessLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      RetentionInDays: !Ref LogRetention
+
+  LogBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      AccessControl: Private
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+
+  AlarmTopic:
+    Type: AWS::SNS::Topic
+
+  ##############################################################################
+  # Endpoint Lambdas
+  ##############################################################################
+
+  FnPing:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: ../.tmp/functions/@beacon/function-ping
+      Policies:
+        - AWSLambdaBasicExecutionRole
+        - AWSLambda_ReadOnlyAccess
+        - AWSXrayWriteOnlyAccess
+        - CloudWatchLambdaInsightsExecutionRolePolicy
+        - CloudWatchPutMetricPolicy: {}
+
+  FnPingResources:
+    Type: AWS::Serverless::Application
+    Properties:
+      Location: lambda-resources.yml
+      Parameters:
+        Api: !Ref Api
+        FunctionName: !Ref FnPing
+        FunctionBaseName: 'FnPing'
+        LambdaLatencyP99Threshold: '5000'
+        LambdaLatencyP95Threshold: '1000'
+        LogRetention: !Ref LogRetention
+        HttpMethod: GET
+        HttpPath: 'api/v1/ping'
+        StageName: !Ref StageName
+        Topic: !Ref AlarmTopic
