@@ -126,6 +126,9 @@ $(LAMBDA_OUTPUT_PATHS) &: $(LAMBDA_INTERMEDIATE_PATHS) $(wildcard cloudformation
 ## Targets
 ###############################################################################
 
+dredd.yml: dredd.yml.tpl cloudformation/config.toml scripts/Makefile/dredd
+	scripts/Makefile/dredd $< > $@
+
 packages/@beacon/gateway-schema/src/__generated__/index.ts: cloudformation/api.yml
 	$(NPX) openapi-typescript $< --prettier-config ./.prettierrc --output $@
 
