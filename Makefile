@@ -65,8 +65,9 @@ PACKAGES                  := $(subst $(PACKAGES_DIR)/,,$(wildcard $(PACKAGES_DIR
 
 LAMBDA_FUNCTION_PACKAGES  := $(filter @beacon/function-%,$(PACKAGES))
 LAMBDA_RESOURCE_NAMES     := $(shell echo '$(subst @beacon/function-,,$(LAMBDA_FUNCTION_PACKAGES))' | sed -r 's#(^|_)([a-z])#Fn\U\2#g')
-LAMBDA_OUTPUT_PATHS       := $(addsuffix /index.js,$(addprefix .aws-sam/build/,$(LAMBDA_RESOURCE_NAMES)))
-LAMBDA_INTERMEDIATE_PATHS := $(addsuffix /index.js,$(addprefix .tmp/functions/,$(LAMBDA_FUNCTION_PACKAGES)))
+LAMBDA_FILES              := collector.yaml index.js index.js.map
+LAMBDA_OUTPUT_PATHS       := $(foreach LAMBDA_FILE,$(LAMBDA_FILES),$(addsuffix /$(LAMBDA_FILE),$(addprefix .aws-sam/build/,$(LAMBDA_RESOURCE_NAMES))))
+LAMBDA_INTERMEDIATE_PATHS := $(foreach LAMBDA_FILE,$(LAMBDA_FILES),$(addsuffix /$(LAMBDA_FILE),$(addprefix .tmp/functions/,$(LAMBDA_FUNCTION_PACKAGES))))
 
 ################################################################################
 ## Public Targets
@@ -104,9 +105,16 @@ $(SENTINEL_DIR):
 # rules. On the other hand, it makes make -pq a lot more helpful and it's the
 # only way to set up the proper dependency chain.
 define GEN_INTERMEDIATE
-.tmp/functions/$(PACKAGE)/index.js: PACKAGE_PATH=$(call package_path,$(PACKAGE))
-.tmp/functions/$(PACKAGE)/index.js: $(call compute_deps_for_package,$(PACKAGE))
+
+.tmp/functions/$(PACKAGE)/index.js .tmp/functions/$(PACKAGE)/index.js.map &: PACKAGE_PATH=$(call package_path,$(PACKAGE))
+.tmp/functions/$(PACKAGE)/index.js .tmp/functions/$(PACKAGE)/index.js.map &: $(call compute_deps_for_package,$(PACKAGE))
 	$(NPX) esbuild --bundle --outfile=$$(@) --format=cjs --platform=node --sourcemap '$$(PACKAGE_PATH)'
+
+.tmp/functions/$(PACKAGE)/collector.yaml: OUT_DIR=$(PACKAGE)
+.tmp/functions/$(PACKAGE)/collector.yaml: cloudformation/opentelemetry.yml
+	mkdir --parents .tmp/functions/$$(OUT_DIR)
+	cp $$< $$@
+
 endef
 $(foreach PACKAGE,$(LAMBDA_FUNCTION_PACKAGES),$(eval $(GEN_INTERMEDIATE)))
 

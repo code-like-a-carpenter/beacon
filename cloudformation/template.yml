@@ -34,14 +34,19 @@ Globals:
   Function:
     Environment:
       Variables:
+        AWS_LAMBDA_EXEC_WRAPPER: /opt/otel-handler
         NODE_ENV: 'production'
         NODE_OPTIONS: '--trace-warnings'
+        OPENTELEMETRY_COLLECTOR_CONFIG_FILE: /var/task/collector.yaml
         SHA: !Ref SHA
         STAGE_NAME: !Ref StageName
     Handler: index.handler
     Layers:
       - !Sub 'arn:aws:lambda:${AWS::Region}:580247275435:layer:LambdaInsightsExtension:16'
-    MemorySize: 128
+      - !Sub 'arn:aws:lambda:${AWS::Region}:901920570463:layer:aws-otel-nodejs-amd64-ver-1-0-1:2'
+    # OpenTelemetry boosts our memory requirements. The trivial ping endpoint
+    # hits 126MB as soon as we add the layer.
+    MemorySize: 256
     Runtime: nodejs16.x
     Tracing: Active
     Timeout: 30
