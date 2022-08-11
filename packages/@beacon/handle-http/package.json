@@ -8,6 +8,6 @@
     "@remix-run/web-fetch": "^4.2.0"
   },
   "devDependencies": {
-    "@types/aws-lambda": "^8.10.101"
+    "@types/aws-lambda": "^8.10.102"
   }
 }
