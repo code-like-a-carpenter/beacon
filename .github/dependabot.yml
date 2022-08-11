@@ -5,6 +5,11 @@ updates:
     ignore:
       - dependency-name: "node"
         update-types: ["version-update:semver-major"]
+      - dependency-name: @opentelemetry/exporter-trace-otlp-grpc
+        versions:
+          # this version is broken so hold updating until 0.32.0 is released.
+          - '0.31.0'
+
     schedule:
       interval: "daily"
 
