@@ -1,7 +1,10 @@
 import {diag} from '@opentelemetry/api';
 import {OTLPTraceExporter} from '@opentelemetry/exporter-trace-otlp-grpc';
 import {NodeTracerProvider} from '@opentelemetry/node';
-import {BatchSpanProcessor} from '@opentelemetry/tracing';
+import {
+  BatchSpanProcessor,
+  SDKRegistrationConfig,
+} from '@opentelemetry/tracing';
 
 // Copied from
 // https://github.com/open-telemetry/opentelemetry-lambda/blob/e13a8ce7328e6739ed510d66bc5461427fee8eb2/nodejs/packages/layer/src/wrapper.ts#L42-L50
@@ -14,9 +17,9 @@ declare global {
   function configureTracerProvider(tracerProvider: NodeTracerProvider): void;
 
   // function configureTracer(defaultConfig: NodeTracerConfig): NodeTracerConfig;
-  // function configureSdkRegistration(
-  //   defaultSdkRegistration: SDKRegistrationConfig
-  // ): SDKRegistrationConfig;
+  function configureSdkRegistration(
+    defaultSdkRegistration: SDKRegistrationConfig
+  ): SDKRegistrationConfig;
   // function configureLambdaInstrumentation(
   //   config: AwsLambdaInstrumentationConfig
   // ): AwsLambdaInstrumentationConfig;
@@ -32,4 +35,13 @@ global.configureTracerProvider = (tracerProvider) => {
   tracerProvider.addSpanProcessor(
     new BatchSpanProcessor(new OTLPTraceExporter())
   );
+};
+
+global.configureSdkRegistration = (config) => {
+  return {
+    ...config,
+    // Supress the opentelemetry layer's propagator(s) in favor of the one ones
+    // registered by the aws otel layer
+    propagator: null,
+  };
 };
