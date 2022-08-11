@@ -59,7 +59,7 @@ compute_deps_for_package = $(shell $(CLI) compute-deps-for-package $(1))
 PACKAGES_DIR             := packages
 SENTINEL_DIR             := .tmp/sentinel
 SAM_CONFIG_ENV           ?= default
-STAGE_NAME							 ?= development
+CHAMBER                  ?= beacon
 
 PACKAGES                  := $(subst $(PACKAGES_DIR)/,,$(wildcard $(PACKAGES_DIR)/*/*))
 
@@ -129,10 +129,7 @@ $(LAMBDA_OUTPUT_PATHS) &: $(LAMBDA_INTERMEDIATE_PATHS) $(wildcard cloudformation
 	 --template-file $$(pwd)/cloudformation/template.yml
 
 .tmp/sentinel/deploy: $(LAMBDA_OUTPUT_PATHS) .tmp/nodejs.zip | $(SENTINEL_DIR)
-	sam deploy \
-	 --config-file $$(pwd)/cloudformation/config.toml \
-	 --template-file $$(pwd)/cloudformation/template.yml \
-	 --parameter-overrides "SHA=$$(git rev-parse HEAD) StageName=$(STAGE_NAME)"
+	chamber exec $(CHAMBER) -- ./scripts/deploy
 	@touch $@
 
 ###############################################################################

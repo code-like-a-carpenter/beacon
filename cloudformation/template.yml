@@ -18,6 +18,9 @@ Parameters:
   SHA:
     Type: String
 
+  XHoneycombTeam:
+    Type: String
+
 Outputs:
   ApiUrl:
     Value: !Sub 'https://${Api}.execute-api.${AWS::Region}.amazonaws.com/${StageName}/'
@@ -40,6 +43,7 @@ Globals:
         OPENTELEMETRY_COLLECTOR_CONFIG_FILE: /var/task/collector.yaml
         SHA: !Ref SHA
         STAGE_NAME: !Ref StageName
+        X_HONEYCOMB_TEAM: !Ref XHoneycombTeam
     Handler: index.handler
     Layers:
       - !Ref DependenciesLayer

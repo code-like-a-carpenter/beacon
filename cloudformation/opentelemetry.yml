@@ -5,12 +5,17 @@ receivers:
 
 exporters:
   awsxray:
+  otlp/honeycomb:
+    endpoint: api.honeycomb.io:443
+    headers:
+      "x-honeycomb-team": "${X_HONEYCOMB_TEAM}"
 
 service:
   pipelines:
     traces:
       exporters:
         - awsxray
+        - otlp/honeycomb
       receivers:
         - otlp
   telemetry:
