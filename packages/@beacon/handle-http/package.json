@@ -4,6 +4,7 @@
   "dependencies": {
     "@beacon/gateway-schema": "*",
     "@beacon/logger": "*",
+    "@beacon/telemetry": "*",
     "@remix-run/web-fetch": "^4.2.0"
   },
   "devDependencies": {

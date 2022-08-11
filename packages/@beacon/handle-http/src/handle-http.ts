@@ -1,7 +1,6 @@
-import {APIGatewayProxyHandler} from 'aws-lambda';
-
 import {operations} from '@beacon/gateway-schema';
 import {logger} from '@beacon/logger';
+import {withTelemetry} from '@beacon/telemetry';
 
 import {formatFailure, formatSuccess} from './format';
 import {parseEvent} from './parse';
@@ -10,7 +9,7 @@ import {DefinitelyAsyncAPIGatewayProxyHandler, TypedHandler} from './types';
 export function handleHttp<P extends keyof operations>(
   cb: TypedHandler<P>
 ): DefinitelyAsyncAPIGatewayProxyHandler {
-  return async (event, context) => {
+  return withTelemetry({}, async (event, context) => {
     const l = logger.child({
       awsRequestId: context.awsRequestId,
       method: event.httpMethod,
@@ -31,5 +30,5 @@ export function handleHttp<P extends keyof operations>(
     } catch (err) {
       return formatFailure(err, betterEvent, context, logger);
     }
-  };
+  });
 }
