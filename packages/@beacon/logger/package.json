@@ -1,0 +1,12 @@
+{
+  "name": "@beacon/logger",
+  "main": "src/index.ts",
+  "dependencies": {
+    "@beacon/env": "*",
+    "fast-safe-stringify": "^2.1.1"
+  },
+  "devDependencies": {
+    "@sinonjs/fake-timers": "^9.1.2",
+    "@types/sinonjs__fake-timers": "^8.1.2"
+  }
+}

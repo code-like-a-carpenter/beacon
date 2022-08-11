@@ -1,0 +1,10 @@
+{
+  "name": "@beacon/cli-cli-deps",
+  "main": "./src/index.ts",
+  "dependencies": {
+    "@beacon/cli-deps": "*",
+    "@beacon/logger": "*",
+    "glob": "^8.0.3",
+    "yargs": "^17.5.1"
+  }
+}

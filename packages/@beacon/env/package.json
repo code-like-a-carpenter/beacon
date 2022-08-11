@@ -1,0 +1,4 @@
+{
+  "name": "@beacon/env",
+  "main": "src/index.ts"
+}
