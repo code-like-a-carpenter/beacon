@@ -5,17 +5,14 @@ receivers:
 
 exporters:
   awsxray:
-  logging:
-    loglevel: debug
 
 service:
   pipelines:
     traces:
       exporters:
         - awsxray
-        - logging
       receivers:
         - otlp
   telemetry:
     logs:
-      level: debug
+      level: error
