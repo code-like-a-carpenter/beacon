@@ -1,3 +1,5 @@
+import {trace, SpanKind, SpanStatusCode} from '@opentelemetry/api';
+
 import {Context, Interactor} from './types';
 
 /**
@@ -8,5 +10,25 @@ export async function interact<T, R>(
   args: T,
   context: Context
 ): Promise<R> {
-  return interactor(args, context);
+  return trace
+    .getTracer('default')
+    .startActiveSpan(
+      interactor.name ?? 'unknown interactor',
+      {kind: SpanKind.INTERNAL},
+      async (span) => {
+        try {
+          return await interactor(args, context);
+        } catch (err) {
+          const error =
+            err instanceof Error
+              ? err
+              : new Error(typeof err === 'string' ? err : undefined);
+          span.setStatus({code: SpanStatusCode.ERROR, message: error.message});
+          span.recordException(error);
+          throw err;
+        } finally {
+          span.end();
+        }
+      }
+    );
 }
