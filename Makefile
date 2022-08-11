@@ -108,7 +108,7 @@ define GEN_INTERMEDIATE
 
 .tmp/functions/$(PACKAGE)/index.js .tmp/functions/$(PACKAGE)/index.js.map &: PACKAGE_PATH=$(call package_path,$(PACKAGE))
 .tmp/functions/$(PACKAGE)/index.js .tmp/functions/$(PACKAGE)/index.js.map &: $(call compute_deps_for_package,$(PACKAGE))
-	$(NPX) esbuild --bundle --outfile=$$(@) --format=cjs --platform=node --sourcemap '$$(PACKAGE_PATH)'
+	$(NPX) esbuild --bundle --outfile=$$(@) --format=cjs --external:'@opentelemetry*' --platform=node --sourcemap '$$(PACKAGE_PATH)'
 
 .tmp/functions/$(PACKAGE)/collector.yaml: OUT_DIR=$(PACKAGE)
 .tmp/functions/$(PACKAGE)/collector.yaml: cloudformation/opentelemetry.yml
@@ -118,12 +118,12 @@ define GEN_INTERMEDIATE
 endef
 $(foreach PACKAGE,$(LAMBDA_FUNCTION_PACKAGES),$(eval $(GEN_INTERMEDIATE)))
 
-$(LAMBDA_OUTPUT_PATHS) &: $(LAMBDA_INTERMEDIATE_PATHS) $(wildcard cloudformation/*)
+$(LAMBDA_OUTPUT_PATHS) &: $(LAMBDA_INTERMEDIATE_PATHS) $(wildcard cloudformation/*) .tmp/nodejs.zip
 	 sam build \
 	 --config-file $$(pwd)/cloudformation/config.toml \
 	 --template-file $$(pwd)/cloudformation/template.yml
 
-.tmp/sentinel/deploy: $(LAMBDA_OUTPUT_PATHS) | $(SENTINEL_DIR)
+.tmp/sentinel/deploy: $(LAMBDA_OUTPUT_PATHS) .tmp/nodejs.zip | $(SENTINEL_DIR)
 	sam deploy \
 	 --config-file $$(pwd)/cloudformation/config.toml \
 	 --template-file $$(pwd)/cloudformation/template.yml \
@@ -133,6 +133,17 @@ $(LAMBDA_OUTPUT_PATHS) &: $(LAMBDA_INTERMEDIATE_PATHS) $(wildcard cloudformation
 ###############################################################################
 ## Targets
 ###############################################################################
+
+.tmp/nodejs.zip: dependencies/nodejs/package-lock.json
+	cd dependencies/nodejs
+	npm ci
+	cd ..
+	zip -rq nodejs.zip nodejs
+	mv nodejs.zip ../.tmp/
+
+dependencies/nodejs/package-lock.json: dependencies/nodejs/package.json
+	cd dependencies/nodejs
+	npm install
 
 dredd.yml: dredd.yml.tpl cloudformation/config.toml scripts/Makefile/dredd
 	scripts/Makefile/dredd $< > $@

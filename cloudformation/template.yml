@@ -42,6 +42,7 @@ Globals:
         STAGE_NAME: !Ref StageName
     Handler: index.handler
     Layers:
+      - !Ref DependenciesLayer
       - !Sub 'arn:aws:lambda:${AWS::Region}:580247275435:layer:LambdaInsightsExtension:16'
       - !Sub 'arn:aws:lambda:${AWS::Region}:901920570463:layer:aws-otel-nodejs-amd64-ver-1-0-1:2'
     # OpenTelemetry boosts our memory requirements. The trivial ping endpoint
@@ -95,6 +96,19 @@ Resources:
 
   AlarmTopic:
     Type: AWS::SNS::Topic
+
+  DependenciesLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      CompatibleRuntimes:
+        - nodejs16.x
+      ContentUri: ../.tmp/nodejs.zip
+      Description: |
+        Dependencies that don't bundle well (for example, Open Telemetry
+        packages need to be unmodified singletons).
+      # Need to include the stack name because layer names are global.
+      LayerName: !Sub dependencies-${AWS::StackName}
+      RetentionPolicy: Delete
 
   ##############################################################################
   # Endpoint Lambdas

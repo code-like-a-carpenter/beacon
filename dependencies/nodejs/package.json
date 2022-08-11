@@ -1,0 +1,6 @@
+{
+  "name": "@beacon/dependencies",
+  "dependencies": {
+    "@opentelemetry/api": "^1.1.0"
+  }
+}
