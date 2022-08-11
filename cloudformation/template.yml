@@ -36,7 +36,7 @@ Globals:
       Variables:
         AWS_LAMBDA_EXEC_WRAPPER: /opt/otel-handler
         NODE_ENV: 'production'
-        NODE_OPTIONS: '--trace-warnings'
+        NODE_OPTIONS: '--require ./telemetry --trace-warnings'
         OPENTELEMETRY_COLLECTOR_CONFIG_FILE: /var/task/collector.yaml
         SHA: !Ref SHA
         STAGE_NAME: !Ref StageName

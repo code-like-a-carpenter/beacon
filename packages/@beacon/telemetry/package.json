@@ -1,5 +1,5 @@
 {
-  "name": "@beacon/dependencies",
+  "name": "@beacon/telemetry",
   "dependencies": {
     "@opentelemetry/api": "^1.1.0",
     "@opentelemetry/exporter-trace-otlp-grpc": "^0.30.0",

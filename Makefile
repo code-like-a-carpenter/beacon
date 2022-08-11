@@ -65,7 +65,7 @@ PACKAGES                  := $(subst $(PACKAGES_DIR)/,,$(wildcard $(PACKAGES_DIR
 
 LAMBDA_FUNCTION_PACKAGES  := $(filter @beacon/function-%,$(PACKAGES))
 LAMBDA_RESOURCE_NAMES     := $(shell echo '$(subst @beacon/function-,,$(LAMBDA_FUNCTION_PACKAGES))' | sed -r 's#(^|_)([a-z])#Fn\U\2#g')
-LAMBDA_FILES              := collector.yaml index.js index.js.map
+LAMBDA_FILES              := collector.yaml index.js index.js.map telemetry.js
 LAMBDA_OUTPUT_PATHS       := $(foreach LAMBDA_FILE,$(LAMBDA_FILES),$(addsuffix /$(LAMBDA_FILE),$(addprefix .aws-sam/build/,$(LAMBDA_RESOURCE_NAMES))))
 LAMBDA_INTERMEDIATE_PATHS := $(foreach LAMBDA_FILE,$(LAMBDA_FILES),$(addsuffix /$(LAMBDA_FILE),$(addprefix .tmp/functions/,$(LAMBDA_FUNCTION_PACKAGES))))
 
@@ -114,6 +114,11 @@ define GEN_INTERMEDIATE
 .tmp/functions/$(PACKAGE)/collector.yaml: cloudformation/opentelemetry.yml
 	mkdir --parents .tmp/functions/$$(OUT_DIR)
 	cp $$< $$@
+
+.tmp/functions/$(PACKAGE)/telemetry.js: OUT_DIR=$(PACKAGE)
+.tmp/functions/$(PACKAGE)/telemetry.js: $(PACKAGES_DIR)/@beacon/telemetry/src/include.ts
+	mkdir --parents .tmp/functions/$$(OUT_DIR)
+	$(NPX) esbuild --bundle --outfile=$$(@) --format=cjs --external:'@opentelemetry*' --platform=node --sourcemap '$$(<)'
 
 endef
 $(foreach PACKAGE,$(LAMBDA_FUNCTION_PACKAGES),$(eval $(GEN_INTERMEDIATE)))
