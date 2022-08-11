@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+SHA="$(git rev-parse HEAD)"
+
+env
+
+PARAMETER_OVERRIDES=''
+PARAMETER_OVERRIDES="$PARAMETER_OVERRIDES ParameterKey=SHA,ParameterValue=$SHA}"
+PARAMETER_OVERRIDES="$PARAMETER_OVERRIDES ParameterKey=XHoneycombTeam,ParameterValue=$X_HONEYCOMB_TEAM"
+
+sam deploy \
+ --config-file $(pwd)/cloudformation/config.toml \
+ --template-file $(pwd)/cloudformation/template.yml \
+ --parameter-overrides "$PARAMETER_OVERRIDES"

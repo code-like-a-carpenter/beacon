@@ -2,6 +2,8 @@
   "name": "@beacon/interact",
   "main": "src/index.ts",
   "dependencies": {
-    "@beacon/logger": "*"
+    "@beacon/logger": "*",
+    "@beacon/telemetry": "*",
+    "@opentelemetry/api": "^1.1.0"
   }
 }

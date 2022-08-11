@@ -18,6 +18,9 @@ Parameters:
   SHA:
     Type: String
 
+  XHoneycombTeam:
+    Type: String
+
 Outputs:
   ApiUrl:
     Value: !Sub 'https://${Api}.execute-api.${AWS::Region}.amazonaws.com/${StageName}/'
@@ -34,14 +37,21 @@ Globals:
   Function:
     Environment:
       Variables:
+        AWS_LAMBDA_EXEC_WRAPPER: /opt/otel-handler
         NODE_ENV: 'production'
-        NODE_OPTIONS: '--trace-warnings'
+        NODE_OPTIONS: '--require ./telemetry --trace-warnings'
+        OPENTELEMETRY_COLLECTOR_CONFIG_FILE: /var/task/collector.yaml
         SHA: !Ref SHA
         STAGE_NAME: !Ref StageName
+        X_HONEYCOMB_TEAM: !Ref XHoneycombTeam
     Handler: index.handler
     Layers:
+      - !Ref DependenciesLayer
       - !Sub 'arn:aws:lambda:${AWS::Region}:580247275435:layer:LambdaInsightsExtension:16'
-    MemorySize: 128
+      - !Sub 'arn:aws:lambda:${AWS::Region}:901920570463:layer:aws-otel-nodejs-amd64-ver-1-0-1:2'
+    # OpenTelemetry boosts our memory requirements. The trivial ping endpoint
+    # hits 126MB as soon as we add the layer.
+    MemorySize: 256
     Runtime: nodejs16.x
     Tracing: Active
     Timeout: 30
@@ -90,6 +100,19 @@ Resources:
 
   AlarmTopic:
     Type: AWS::SNS::Topic
+
+  DependenciesLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      CompatibleRuntimes:
+        - nodejs16.x
+      ContentUri: ../.tmp/nodejs.zip
+      Description: |
+        Dependencies that don't bundle well (for example, Open Telemetry
+        packages need to be unmodified singletons).
+      # Need to include the stack name because layer names are global.
+      LayerName: !Sub dependencies-${AWS::StackName}
+      RetentionPolicy: Delete
 
   ##############################################################################
   # Endpoint Lambdas
