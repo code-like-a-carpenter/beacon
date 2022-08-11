@@ -1,0 +1,14 @@
+version=0.1
+
+[default.global.parameters]
+stack_name="beacon"
+beta_features=true
+region="us-east-1"
+
+[default.deploy.parameters]
+capabilities = ["CAPABILITY_AUTO_EXPAND", "CAPABILITY_IAM"]
+confirm_changeset=false
+# parameter_overrides specified here are overwritten by those specified on the
+# command line. As such, they must not be specified here.
+resolve_s3=true
+s3_prefix="beacon"

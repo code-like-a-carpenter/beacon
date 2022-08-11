@@ -1,0 +1,21 @@
+FORMAT: 1A
+HOST: https://beacon.code-like-a-carpent.com/
+
+# Beacon
+
+# Group Internal Operations
+
+### Ping [GET /api/v1/ping]
+
+In a serverless world, ping and healthcheck endpoints aren't particularly useful
+in terms of confirming a service hasn't crashed, however, a simple ping endpoint
+can be super helpful in development and test environments for confirming that
+builds are configured correctly.
+
++ Response 200 (application/json)
+
+    + Body
+
+            {
+                "status": "ok"
+            }

@@ -1,0 +1,7 @@
+{
+  "name": "@beacon/interact",
+  "main": "src/index.ts",
+  "dependencies": {
+    "@beacon/logger": "*"
+  }
+}

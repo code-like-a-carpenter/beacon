@@ -1,0 +1,4 @@
+{
+  "name": "@beacon/gateway-schema",
+  "main": "src/index.ts"
+}

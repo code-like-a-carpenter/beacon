@@ -1,0 +1,9 @@
+{
+  "name": "@beacon/function-ping",
+  "main": "src/index.ts",
+  "version": "0.0.0-development",
+  "dependencies": {
+    "@beacon/handle-http": "*",
+    "@beacon/interact": "*"
+  }
+}
