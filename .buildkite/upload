@@ -10,6 +10,7 @@ source "$__DIRNAME/utilities"
 
 main () {
   pipeline build.yml
+  pipeline lint.yml
 }
 
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then

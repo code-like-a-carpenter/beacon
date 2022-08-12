@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+export TSC_OPTIONS='| tee reports/style/tsc.log'
+export ESLINT_FORMAT_OPTIONS='--format json-with-metadata --output-file reports/style/eslint.json'
+export NODE_ENV=test
+npm run lint:es
+npm run lint:types
+
+# The main branch changelog will probably have commits that fail
+# commitlint. For example, dependebot doesn't honor the commitlint line
+# length rule, so that's disabled for dependebot branches (and, therefore,
+# main will contain commits that fail commitlint).
+if [ "$BUILDKITE_BRANCH" != "$BUILDKITE_PIPELINE_DEFAULT_BRANCH" ]; then
+  npm run lint:changelog
+fi

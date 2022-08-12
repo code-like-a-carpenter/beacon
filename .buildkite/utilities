@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+export CHECK_RUN_REPORTER_REPO_TOKEN='1a626bae-dbc9-4f82-9848-f71dd5be9ae6'
+
 # Make sure that __DIRNAME is the fully qualified path to the directory where
 # this script is located.
 __DIRNAME=${__DIRNAME:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}
@@ -28,6 +30,10 @@ CI_DOCKER_COMPOSE_IMAGE_MAIN_TAG="$BUILDKITE_PLUGIN_DOCKER_COMPOSE_IMAGE_REPOSIT
 # The ECR repository name of current branch Docker image
 export CI_DOCKER_COMPOSE_IMAGE_BRANCH_TAG
 CI_DOCKER_COMPOSE_IMAGE_BRANCH_TAG="$BUILDKITE_PLUGIN_DOCKER_COMPOSE_IMAGE_REPOSITORY:$CI_SAFE_BRANCH_NAME"
+
+# Print debug logs from the axios client used by the Check Run Reporter plugin
+export DEBUG
+DEBUG=axios
 
 has_buildkite_agent () {
   command -v buildkite-agent > /dev/null 2>&1

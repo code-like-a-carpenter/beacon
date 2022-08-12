@@ -1,12 +1,9 @@
 steps:
   - label: ':docker: Build'
+    <<: *step
     key: build
     plugins:
-      - ecr#v2.2.0:
-          account_ids:
-            - '860886756023'
-          login: true
-          retries: 3
+      - ecr#v2.2.0: *plugins_ecr
       - docker-compose#v3.7.0:
           build: ci
           cache-from:
@@ -21,9 +18,3 @@ steps:
             # that on the default branch, this will immediately overwrite the
             # image, even if the rest of this overall build fails.
             - 'ci:$CI_DOCKER_COMPOSE_IMAGE_BRANCH_TAG'
-    retry:
-      automatic:
-        - exit_status: -1  # Agent was lost
-          limit: 2
-        - exit_status: 255 # Forced agent shutdown
-          limit: 2
