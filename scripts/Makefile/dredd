@@ -6,11 +6,17 @@ toml_to_json () {
   docker run --rm -v "$PWD":/workdir --platform linux/amd64 pelletier/go-toml tomljson "/workdir/$1"
 }
 
-STACK_NAME=$(toml_to_json cloudformation/config.toml | jq -r .default.global.parameters.stack_name)
+STACK_NAME=
+if [ -n "${CI:-}" ]; then
+  STACK_NAME="$CI_STACK_NAME"
+else
+  STACK_NAME=$(toml_to_json cloudformation/config.toml | jq -r .default.global.parameters.stack_name)
+fi
 
 ENDPOINT=$(aws cloudformation describe-stacks --stack-name "$STACK_NAME" | jq -r '.Stacks[0].Outputs[] | select(.OutputKey == "ApiUrl") | .OutputValue')
 
-sed -e "s#endpoint.*#endpoint: $ENDPOINT#" dredd.yml.tpl
+OUT=$(sed -e "s#endpoint.*#endpoint: $ENDPOINT#" dredd.yml.tpl)
 if [ -n "${BUILDKITE_JOB_ID:-}" ]; then
-  sed -e "s#  - reports/junit/dredd.xml#  - reports/junit/dredd-$BUILDKITE_JOB_ID.xml#" dredd.yml.tpl
+  OUT=$(echo "$OUT" | sed -e "s#  - reports/junit/dredd.xml#  - reports/junit/dredd-$BUILDKITE_JOB_ID.xml#")
 fi
+echo "$OUT"

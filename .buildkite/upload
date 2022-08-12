@@ -19,12 +19,19 @@ main () {
   CMD='npm test -- --selectProjects "Unit Tests" --maxWorkers 2' \
     LABEL=":jest: Jest (Unit Tests)" \
     CHECK_RUN_REPORTER_LABEL="Jest (Unit Tests)" \
-    KEY=jest-unit \
+    KEY=test-unit \
     pipeline test.yml
 
-  pipeline stack.yml
+  CMD='scripts/test-dredd' \
+    DEPENDS_ON="$DEPENDS_ON, sam-deploy" \
+    LABEL=":cloudformation: Contract Tests" \
+    CHECK_RUN_REPORTER_LABEL="Contract Tests" \
+    KEY=test-contract \
+    pipeline test.yml
 
-  DEPENDS_ON="$DEPENDS_ON, lint, jest-unit" pipeline process-reports.yml
+  DESTROY_DEPENDS_ON='test-contract' pipeline stack.yml
+
+  DEPENDS_ON="$DEPENDS_ON, lint, test-contract, test-unit" pipeline process-reports.yml
 }
 
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then

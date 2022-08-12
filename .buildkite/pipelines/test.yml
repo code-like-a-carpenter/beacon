@@ -5,7 +5,7 @@ steps:
       - 'reports/**/*'
     command: |
       $CMD
-    depends_on: $DEPENDS_ON
+    depends_on: [ $DEPENDS_ON ]
     env:
       NODE_ENV: 'test'
     key: '$KEY'
