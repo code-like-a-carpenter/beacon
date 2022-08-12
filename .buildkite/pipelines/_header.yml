@@ -1,14 +1,14 @@
 .plugins: &plugins
   - ecr#v2.5.0: &plugins_ecr
-      login: true
       account_ids:
         - '860886756023'
+      login: true
       retries: 3
   - docker-compose#v3.7.0: &plugins_docker_compose
-      environment: *docker_compose_environment
       config: &plugins_docker_compose_config
         - docker-compose.yml
       dependencies: true
+      environment: *docker_compose_environment
       run: ci
       use-aliases: true
       volumes: &plugins_docker_compose_volumes
@@ -27,3 +27,12 @@
   plugins: *plugins
   retry: *retry
   timeout_in_minutes: 10
+
+.test_retry: &test_retry
+  automatic:
+    - exit_status: -1  # Agent was lost
+      limit: 2
+    - exit_status: 1  # Tests failed
+      limit: 2
+    - exit_status: 255 # Forced agent shutdown
+      limit: 2

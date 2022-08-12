@@ -1,0 +1,18 @@
+steps:
+  - label: '$LABEL'
+    <<: *step
+    artifact_paths:
+      - 'reports/**/*'
+    command: |
+      $CMD
+    depends_on: $DEPENDS_ON
+    env:
+      NODE_ENV: 'test'
+    key: '$KEY'
+    plugins:
+      - ecr#v2.2.0: *plugins_ecr
+      - docker-compose#v3.7.0: *plugins_docker_compose
+      - check-run-reporter/check-run-reporter#main:
+          label: '$CHECK_RUN_REPORTER_LABEL'
+          report: 'reports/junit/**/*.xml'
+          token: '$CHECK_RUN_REPORTER_REPO_TOKEN'

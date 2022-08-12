@@ -11,6 +11,16 @@ source "$__DIRNAME/utilities"
 main () {
   pipeline build.yml
   pipeline lint.yml
+
+  export DEPENDS_ON='build'
+  # Explicitly set maxWorkers; jest determines the max to be 1 which has a lot of
+  # surprising side effects (like causing nock to disable the network in
+  # integration tests)
+  CMD='npm test -- --selectProjects "Unit Tests" --maxWorkers 2' \
+    LABEL=":jest: Jest (Unit Tests)" \
+    CHECK_RUN_REPORTER_LABEL="Jest (Unit Tests)" \
+    KEY=jest-unit \
+    pipeline test.yml
 }
 
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then

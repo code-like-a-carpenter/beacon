@@ -1,20 +1,20 @@
 steps:
   - label: ':typescript: :eslint: Lint'
     <<: *step
-    key: lint
     artifact_paths:
       - 'reports/**/*'
     command: ./scripts/lint
     depends_on:
       - build
+    key: lint
     plugins:
       - ecr#v2.2.0: *plugins_ecr
       - docker-compose#v3.7.0: *plugins_docker_compose
       - check-run-reporter/check-run-reporter#main:
-          report: 'reports/style/eslint.json'
           label: 'ESLint (buildkite)'
+          report: 'reports/style/eslint.json'
           token: '$CHECK_RUN_REPORTER_REPO_TOKEN'
       - check-run-reporter/check-run-reporter#main:
-          report: 'reports/style/tsc.log'
           label: 'TSC (buildkite)'
+          report: 'reports/style/tsc.log'
           token: '$CHECK_RUN_REPORTER_REPO_TOKEN'
