@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+__FILENAME=$(realpath "$0")
+__DIRNAME=$(dirname "$__FILENAME")
+
+# shellcheck source=./utilities
+source "$__DIRNAME/utilities"
+
+main () {
+  pipeline build.yml
+}
+
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+  main
+fi
