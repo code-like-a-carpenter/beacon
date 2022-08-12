@@ -21,6 +21,8 @@ main () {
     CHECK_RUN_REPORTER_LABEL="Jest (Unit Tests)" \
     KEY=jest-unit \
     pipeline test.yml
+
+  DEPENDS_ON="$DEPENDS_ON, lint, jest-unit" pipeline process-reports.yml
 }
 
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
