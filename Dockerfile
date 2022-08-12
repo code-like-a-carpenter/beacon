@@ -163,3 +163,5 @@ RUN time npm ci --cache ${NPM_CACHE_FOLDER}
 
 # Copy the rest of the code
 COPY ./ ./
+
+RUN make build

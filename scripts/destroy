@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+sam delete \
+  --config-file $(pwd)/cloudformation/config.toml \
+  --no-prompts \
+  --region="${AWS_REGION:-$AWS_DEFAULT_REGION}" \
+  --stack-name="${STACK_NAME:-$CI_STACK_NAME}"

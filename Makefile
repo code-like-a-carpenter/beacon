@@ -132,6 +132,11 @@ $(LAMBDA_OUTPUT_PATHS) &: $(LAMBDA_INTERMEDIATE_PATHS) $(wildcard cloudformation
 	chamber exec $(CHAMBER) -- ./scripts/deploy
 	@touch $@
 
+destroy:
+	rm -rf .tmp/sentinel/deploy
+	./scripts/destroy
+.PHONY: destroy
+
 ###############################################################################
 ## Targets
 ###############################################################################

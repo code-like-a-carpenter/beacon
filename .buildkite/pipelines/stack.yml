@@ -1,0 +1,16 @@
+steps:
+  - label: ':cloudformation: deploy'
+    <<: *step
+    command: make deploy
+    depends_on:
+      - build
+    key: sam-deploy
+
+  - label: ':cloudformation: delete'
+    <<: *step
+    allow_dependency_failure: true
+    command: make destroy
+    depends_on:
+      - build
+      - sam-deploy
+    key: sam-destroy

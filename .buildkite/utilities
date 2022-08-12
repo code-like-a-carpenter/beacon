@@ -12,6 +12,8 @@ if [ -z "${CI:-}" ]; then
   BUILDKITE_BRANCH=${BUILDKITE_BRANCH:-$(git rev-parse --abbrev-ref HEAD)}
   BUILDKITE_PLUGIN_DOCKER_COMPOSE_IMAGE_REPOSITORY=${BUILDKITE_PLUGIN_DOCKER_COMPOSE_IMAGE_REPOSITORY:-fake_repository_name}
   BUILDKITE_PIPELINE_DEFAULT_BRANCH=${BUILDKITE_PIPELINE_DEFAULT_BRANCH:-main}
+  BUILDKITE_PIPELINE_NAME=${BUILDKITE_PIPELINE_NAME:-fake_pipeline_name}
+  BUILDKITE_COMMIT=${BUILDKITE_COMMIT:-$(git rev-parse HEAD)}
 fi
 
 # Docker tags cannot includes slashes
@@ -30,6 +32,23 @@ CI_DOCKER_COMPOSE_IMAGE_MAIN_TAG="$BUILDKITE_PLUGIN_DOCKER_COMPOSE_IMAGE_REPOSIT
 # The ECR repository name of current branch Docker image
 export CI_DOCKER_COMPOSE_IMAGE_BRANCH_TAG
 CI_DOCKER_COMPOSE_IMAGE_BRANCH_TAG="$BUILDKITE_PLUGIN_DOCKER_COMPOSE_IMAGE_REPOSITORY:$CI_SAFE_BRANCH_NAME"
+
+export CI_STACK_PREFIX
+CI_STACK_PREFIX=ci--$CI_SAFE_BRANCH_NAME
+
+# The name of the CloudFormation stack that'll be deployed for testing. It needs
+# to be unique to so that other jobs don't collide with it and so that, if
+# someone pushes a new commit for this branch when 1. the stack failed to deploy
+# and 2. the stack was not cleaned up, the next job won't fail because the stack
+# is in an unrecoverable state. While the commit is probably enough to guarantee
+# that uniqueness, having the branch makes it much easier to interpret the
+# stacks in the CloudFormation UI.
+export CI_STACK_NAME
+CI_STACK_NAME=ci--$BUILDKITE_PIPELINE_NAME--$CI_SAFE_BRANCH_NAME--$BUILDKITE_COMMIT
+
+# Turn off spyware
+export SAM_CLI_TELEMETRY
+SAM_CLI_TELEMETRY=0
 
 # Print debug logs from the axios client used by the Check Run Reporter plugin
 export DEBUG
