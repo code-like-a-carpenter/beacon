@@ -1,0 +1,4 @@
+.aws-sam
+.tmp
+node_modules
+reports
