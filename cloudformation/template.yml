@@ -4,12 +4,17 @@ Transform: 'AWS::Serverless-2016-10-31'
 Parameters:
   DomainName:
     Type: String
-    Default: 'playground.beacon.codelikeacarpenter.com'
+    Description: |
+      The base domain name for the stack's application. There should already be
+      a matching Route53 Hosted Zone in this account matching this domain.
 
   LogRetention:
     Type: Number
     Default: '3'
     Description: Duration in days to retain logs
+
+  HostedZoneId:
+    Type: String
 
   StageName:
     Type: String
@@ -36,11 +41,6 @@ Conditions:
   IsDev: !Equals
     - !Ref StageName
     - development
-
-  IsNotTest: !Not
-    - !Equals
-      - !Ref StageName
-      - test
 
 Globals:
   Function:
@@ -127,49 +127,90 @@ Resources:
   # DNS
   ##############################################################################
 
-  # I don't really like this setup, but I haven't found a better way to make it
-  # work. This assume that development, test, and prod are all separate accounts
-  # and that that root domain (and its hosted zone) are managed by a fourth
+  # In addition to the following DNS config, HostedZones need to be created
+  # outside of CloudFormation. CF doesn't practically support managing resources
+  # in more than one account,
+  #
+  # The following terraform is one way to create those zones
+  #
+  # ```tf
+  # data "aws_route53_zone" "codelikeacarpenter" {
+  #  name = "codelikeacarpenter.com"
+  # }
+  #
+  # resource "aws_route53_zone" "beacon_production" {
+  #   provider = aws.beacon_production
+  #   name     = "beacon.codelikeacarpenter.com"
+  # }
+  #
+  # resource "aws_route53_record" "beacon_production" {
+  #   zone_id = data.aws_route53_zone.codelikeacarpenter.zone_id
+  #   name    = "beacon.codelikeacarpenter.com"
+  #   type    = "NS"
+  #   # Once this all seems to be working, this should be something more like
+  #   # one day instead of five minutes.
+  #   ttl     = "300"
+  #   records = aws_route53_zone.beacon_production.name_servers
+  # }
+  #
+  # resource "aws_route53_zone" "beacon_ci" {
+  #   provider = aws.ci
+  #   name     = "test.beacon.codelikeacarpenter.com"
+  # }
+  #
+  # resource "aws_route53_record" "beacon_ci" {
+  #   zone_id = data.aws_route53_zone.codelikeacarpenter.zone_id
+  #   name    = "test.beacon.codelikeacarpenter.com"
+  #   type    = "NS"
+  #   # This needs more investigation, but the development and test stacks may
+  #   # deploy significantly faster if this ttl is made much lower.
+  #   ttl     = "300"
+  #   records = aws_route53_zone.beacon_ci.name_servers
+  # }
+  #
+  # resource "aws_route53_zone" "beacon_playground" {
+  #   provider = aws.playground
+  #   name     = "playground.beacon.codelikeacarpenter.com"
+  # }
+  #
+  # resource "aws_route53_record" "beacon_playground" {
+  #   zone_id = data.aws_route53_zone.codelikeacarpenter.zone_id
+  #   name    = "playground.beacon.codelikeacarpenter.com"
+  #   type    = "NS"
+  #   # This needs more investigation, but the development and test stacks may
+  #   # deploy significantly faster if this ttl is made much lower.
+  #   ttl     = "300"
+  #   records = aws_route53_zone.beacon_playground.name_servers
+  # }
+  # ```
+  #
+  # This setup seems to address most of the issues of the previous setup.
+  # 1. The zones are persistent and managed outside of CloudFormation, so
+  # there's no need for the manual step of setting up NS records.
+  # 2. There's still an issue if we want to mount this application at the root
+  # of a domain, but that's now an issue to solve externally. For example,
+  # assuming the domain is registered in the management account, but that we're
+  # to serve prod out of a dedicated account, we can use pretty much the same
+  # terraform config as above, but instead of
+  # `data.aws_route53_zone.codelikeacarpenter`, we can use
+  # `aws_route53domains_registered_domain` to delegate the root domain's zone
+  # to the production account, and then use the rest of the resourse to
+  # that zone instead of the mgmt account's root zone. I won't be doing that
+  # here since I don't want to host codelikeacarpenter.com in the beacon prod
   # account
-  # Problem #1: Stack Update will be stuck until Zone's name servers are entered
-  # into the hosted zone for the main domain. Something like
-  # !Ref DomainName NS ${NameServers}
-  # Unfortunately, there's no way to automate that without a separate stack, a
-  # far more complex build pipeline, and (probably) a bunch of aws cli calls to
-  # interrogate Zone's name servers.
-  # Problem #2: If this were being deployed to a top level domain, it wouldn't
-  # work. There doesn't appear to be anyway to delegate a top-level domain, so
-  # the prod account would have to do the delegation to the other accounts. Such
-  # a setup might actually let us put nearly everything into this cloudformation
-  # template, but it would still be tedious. For one, we'd need to do a few
-  # deployment passes. First, we'd need to just create Zone's in each account.
-  # Then, we'd need to come up with a way for the prod deployment job to find
-  # out the name servers for the other accounts. The we could add the delegation
-  # records to the prod account. Finally,  we could add in the rest of the
-  # resources.
-  # Problem #3: Since we need a way to communicate the Zone's name servers to
-  # the management account, we can't actually run any of this in test. For
-  # something like this to work in test, we'd need to create a permanent Zone
-  # in the test account using CloudFormation or terraform.
-
-  Zone:
-    Type: AWS::Route53::HostedZone
-    Condition: IsNotTest
-    Properties:
-      Name: !Ref DomainName
+  # 3. Now that all the zones are persistent, we can use this setup during tests
 
   Certificate:
     Type: AWS::CertificateManager::Certificate
-    Condition: IsNotTest
     Properties:
       DomainName: !Ref DomainName
       DomainValidationOptions:
         - DomainName: !Ref DomainName
-          HostedZoneId: !Ref Zone
+          HostedZoneId: !Ref HostedZoneId
         - DomainName: !Sub "api.${DomainName}"
-          HostedZoneId: !Ref Zone
+          HostedZoneId: !Ref HostedZoneId
         - DomainName: !Sub "www.${DomainName}"
-          HostedZoneId: !Ref Zone
+          HostedZoneId: !Ref HostedZoneId
       SubjectAlternativeNames:
         - !Sub "api.${DomainName}"
         - !Sub "www.${DomainName}"
@@ -177,7 +218,6 @@ Resources:
 
   ApiDomainName:
     Type: AWS::ApiGateway::DomainName
-    Condition: IsNotTest
     Properties:
       CertificateArn: !Ref Certificate
       DomainName: !Sub 'api.${DomainName}'
@@ -187,7 +227,6 @@ Resources:
 
   ApiBasePathMapping:
     Type: 'AWS::ApiGateway::BasePathMapping'
-    Condition: IsNotTest
     Properties:
       DomainName: !Ref ApiDomainName
       RestApiId: !Ref Api
@@ -195,9 +234,8 @@ Resources:
 
   ApiRoute53RecordSetGroup:
     Type: AWS::Route53::RecordSetGroup
-    Condition: IsNotTest
     Properties:
-      HostedZoneId: !Ref Zone
+      HostedZoneId: !Ref HostedZoneId
       RecordSets:
         - Name: !Sub 'api.${DomainName}'
           Type: A
@@ -212,7 +250,6 @@ Resources:
 
   RootDomainName:
     Type: AWS::ApiGateway::DomainName
-    Condition: IsNotTest
     Properties:
       CertificateArn: !Ref Certificate
       DomainName: !Ref DomainName
@@ -222,7 +259,6 @@ Resources:
 
   RootBasePathMapping:
     Type: 'AWS::ApiGateway::BasePathMapping'
-    Condition: IsNotTest
     Properties:
       DomainName: !Ref RootDomainName
       RestApiId: !Ref Api
@@ -230,9 +266,8 @@ Resources:
 
   RootRoute53RecordSetGroup:
     Type: AWS::Route53::RecordSetGroup
-    Condition: IsNotTest
     Properties:
-      HostedZoneId: !Ref Zone
+      HostedZoneId: !Ref HostedZoneId
       RecordSets:
         - Name: !Sub '${DomainName}'
           Type: A
@@ -247,7 +282,6 @@ Resources:
 
   WwwDomainName:
     Type: AWS::ApiGateway::DomainName
-    Condition: IsNotTest
     Properties:
       CertificateArn: !Ref Certificate
       DomainName: !Sub 'www.${DomainName}'
@@ -257,7 +291,6 @@ Resources:
 
   WwwBasePathMapping:
     Type: 'AWS::ApiGateway::BasePathMapping'
-    Condition: IsNotTest
     Properties:
       DomainName: !Ref WwwDomainName
       RestApiId: !Ref Api
@@ -265,9 +298,8 @@ Resources:
 
   WwwRoute53RecordSetGroup:
     Type: AWS::Route53::RecordSetGroup
-    Condition: IsNotTest
     Properties:
-      HostedZoneId: !Ref Zone
+      HostedZoneId: !Ref HostedZoneId
       RecordSets:
         - Name: !Sub 'www.${DomainName}'
           Type: A

@@ -166,6 +166,10 @@ init_utilities () {
   # stacks in the CloudFormation UI.
   export CI_STACK_NAME
   CI_STACK_NAME=ci--$BUILDKITE_PIPELINE_NAME--$CI_SAFE_BRANCH_NAME--$BUILDKITE_COMMIT
+
+  local SHORT_SHA=${BUILDKITE_COMMIT:0:10}
+  export DOMAIN_NAME="$SHORT_SHA.test.beacon.codelikeacarpenter.com"
+  export ZONE_DOMAIN_NAME=test.beacon.codelikeacarpenter.com
 }
 
 set_local_defaults () {
