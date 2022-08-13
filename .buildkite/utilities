@@ -1,0 +1,163 @@
+#!/usr/bin/env bash
+
+export CHECK_RUN_REPORTER_REPO_TOKEN='1a626bae-dbc9-4f82-9848-f71dd5be9ae6'
+
+# Make sure that __DIRNAME is the fully qualified path to the directory where
+# this script is located.
+__DIRNAME=${__DIRNAME:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}
+
+# If not running in CI, use local values and/or fallbacks so that we can print
+# the output from the command line for debugging.
+if [ -z "${CI:-}" ]; then
+  BUILDKITE_BRANCH=${BUILDKITE_BRANCH:-$(git rev-parse --abbrev-ref HEAD)}
+  BUILDKITE_PLUGIN_DOCKER_COMPOSE_IMAGE_REPOSITORY=${BUILDKITE_PLUGIN_DOCKER_COMPOSE_IMAGE_REPOSITORY:-fake_repository_name}
+  BUILDKITE_PIPELINE_DEFAULT_BRANCH=${BUILDKITE_PIPELINE_DEFAULT_BRANCH:-main}
+  BUILDKITE_PIPELINE_NAME=${BUILDKITE_PIPELINE_NAME:-fake_pipeline_name}
+  BUILDKITE_COMMIT=${BUILDKITE_COMMIT:-$(git rev-parse HEAD)}
+fi
+
+# Docker tags cannot includes slashes
+CI_SAFE_BRANCH_NAME=${BUILDKITE_BRANCH//\//-}
+# Docker tags cannot includes @ signs
+CI_SAFE_BRANCH_NAME=${CI_SAFE_BRANCH_NAME/@/-}
+# Stack names cannot includes underscores
+CI_SAFE_BRANCH_NAME=${CI_SAFE_BRANCH_NAME//_/-}
+# Stack names cannot includes periods
+CI_SAFE_BRANCH_NAME=${CI_SAFE_BRANCH_NAME//\./-}
+
+# The ECR repository name of the main branch Docker image
+export CI_DOCKER_COMPOSE_IMAGE_MAIN_TAG
+CI_DOCKER_COMPOSE_IMAGE_MAIN_TAG="$BUILDKITE_PLUGIN_DOCKER_COMPOSE_IMAGE_REPOSITORY:$BUILDKITE_PIPELINE_DEFAULT_BRANCH"
+
+# The ECR repository name of current branch Docker image
+export CI_DOCKER_COMPOSE_IMAGE_BRANCH_TAG
+CI_DOCKER_COMPOSE_IMAGE_BRANCH_TAG="$BUILDKITE_PLUGIN_DOCKER_COMPOSE_IMAGE_REPOSITORY:$CI_SAFE_BRANCH_NAME"
+
+export CI_STACK_PREFIX
+CI_STACK_PREFIX=ci--$CI_SAFE_BRANCH_NAME
+
+# The name of the CloudFormation stack that'll be deployed for testing. It needs
+# to be unique to so that other jobs don't collide with it and so that, if
+# someone pushes a new commit for this branch when 1. the stack failed to deploy
+# and 2. the stack was not cleaned up, the next job won't fail because the stack
+# is in an unrecoverable state. While the commit is probably enough to guarantee
+# that uniqueness, having the branch makes it much easier to interpret the
+# stacks in the CloudFormation UI.
+export CI_STACK_NAME
+CI_STACK_NAME=ci--$BUILDKITE_PIPELINE_NAME--$CI_SAFE_BRANCH_NAME--$BUILDKITE_COMMIT
+
+# Turn off spyware
+export SAM_CLI_TELEMETRY
+SAM_CLI_TELEMETRY=0
+
+# Print debug logs from the axios client used by the Check Run Reporter plugin
+export DEBUG
+DEBUG=axios
+
+has_buildkite_agent () {
+  command -v buildkite-agent > /dev/null 2>&1
+}
+
+# Gets added to the top of every file sent to buildkite using pipeline()
+#
+# First, itlooks for all the environment variables matching the listed prefixes
+# and configures them to pass through to the docker container.
+#
+# Then, it loads the _header.yml file from the pipelines directory
+#
+header () {
+  cat << EOT
+docker_compose_environment: &docker_compose_environment
+  - AWS_DEFAULT_REGION
+$(env | awk -F= '/^AWS_/ {print "  - " $1}')
+$(env | awk -F= '/^BUILDKITE/ {print "  - " $1}')
+$(env | awk -F= '/^CHECK_RUN_REPORTER_/ {print "  - " $1 "=$" $1}')
+$(env | awk -F= '/^CI_/ {print "  - " $1 "=$" $1}')
+$(env | awk -F= '/^SAM_/ {print "  - " $1 "=$" $1}')
+  - CI
+  - DEBUG
+
+$(template < "$__DIRNAME/pipelines/_header.yml")
+EOT
+}
+
+# Public: Echos to stderr instead of stdout to avoid polluting the pipeline yml
+#
+log () {
+  echo "$@" 1>&2
+}
+
+pipeline () {
+  local template_name
+  template_name=$1
+  log "--- generating template for $template_name"
+
+  local steps
+  steps="$(template < "$__DIRNAME/pipelines/$template_name")"
+  local generated
+  generated="$(cat << EOT
+$(header)
+
+$steps
+EOT
+)"
+
+  if ! upload "$generated"; then
+  cat << EOT | buildkite-agent annotate --style error
+<summary>Buildkite did not accept the following pipeline "$template_name"
+<details>
+
+\`\`\`
+
+$generated
+
+\`\`\`
+
+</details>
+</summary>
+EOT
+
+    log '^^^ +++'
+    log "failed to generate template for $template_name"
+
+    return 1
+  fi
+
+  log "generated template for $template_name"
+}
+
+upload () {
+  local pipeline="$1"
+
+  if has_buildkite_agent; then
+    echo "$pipeline" | buildkite-agent pipeline upload
+  else
+    echo "$pipeline"
+  fi
+}
+
+# Public: Substitutes environment variables into stdin
+#
+# Examples
+#
+#  REPLACEME=foo template < file.tpl
+#
+template () {
+  local python_2_template_script='import os, sys; from string import Template; t = Template("".join(sys.stdin.readlines())); print t.substitute(os.environ)'
+  local python_3_template_script='import os, sys; from string import Template; t = Template("".join(sys.stdin.readlines())); print(t.substitute(os.environ))'
+
+  if command -v python3 > /dev/null 2>&1; then
+    python3 -c "$python_3_template_script"
+  elif command -v python2 > /dev/null 2>&1; then
+    python2 -c "$python_2_template_script"
+  elif command -v python > /dev/null 2>&1; then
+    if [[ $(python --version) =~ ^Python\ 2 ]]; then
+      python -c "$python_2_template_script"
+    else
+      python -c "$python_3_template_script"
+    fi
+  else
+    log "No python interpreter found"
+    return 1
+  fi
+}

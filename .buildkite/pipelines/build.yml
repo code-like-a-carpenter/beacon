@@ -1,0 +1,20 @@
+steps:
+  - label: ':docker: Build'
+    <<: *step
+    key: build
+    plugins:
+      - ecr#v2.2.0: *plugins_ecr
+      - docker-compose#v3.7.0:
+          build: ci
+          cache-from:
+            # First, try to use any builds from this branch as the cache source
+            - 'ci:$CI_DOCKER_COMPOSE_IMAGE_BRANCH_TAG'
+            # Otherwise, fallback to the last default branch build
+            - 'ci:$CI_DOCKER_COMPOSE_IMAGE_MAIN_TAG'
+          config:
+            - docker-compose.yml
+          push:
+            # Once docker build succeeds, update the image for this branch. Note
+            # that on the default branch, this will immediately overwrite the
+            # image, even if the rest of this overall build fails.
+            - 'ci:$CI_DOCKER_COMPOSE_IMAGE_BRANCH_TAG'

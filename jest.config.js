@@ -36,7 +36,7 @@ module.exports = {
         includeConsoleOutput: true,
         outputDirectory: 'reports/junit',
         outputName: `jest${
-          process.env.BUILDKITE_JOB_ID ? `+${process.env.BUILDKITE_JOB_ID}` : ''
+          process.env.BUILDKITE_JOB_ID ? `-${process.env.BUILDKITE_JOB_ID}` : ''
         }.xml`,
         suiteName: 'Unit Tests',
         titleTemplate: '{title}',

@@ -1,0 +1,38 @@
+.plugins: &plugins
+  - ecr#v2.5.0: &plugins_ecr
+      account_ids:
+        - '860886756023'
+      login: true
+      retries: 3
+  - docker-compose#v3.7.0: &plugins_docker_compose
+      config: &plugins_docker_compose_config
+        - docker-compose.yml
+      dependencies: true
+      environment: *docker_compose_environment
+      run: ci
+      use-aliases: true
+      volumes: &plugins_docker_compose_volumes
+        - './reports:/app/reports'
+        - $${BUILDKITE_AGENT_BINARY_PATH:-/usr/bin/buildkite-agent}:/usr/bin/buildkite-agent
+        - /var/run/docker.sock:/var/run/docker.sock
+
+.retry: &retry
+  automatic:
+    - exit_status: -1  # Agent was lost
+      limit: 2
+    - exit_status: 255 # Forced agent shutdown
+      limit: 2
+
+.step: &step
+  plugins: *plugins
+  retry: *retry
+  timeout_in_minutes: 10
+
+.test_retry: &test_retry
+  automatic:
+    - exit_status: -1  # Agent was lost
+      limit: 2
+    - exit_status: 1  # Tests failed
+      limit: 2
+    - exit_status: 255 # Forced agent shutdown
+      limit: 2

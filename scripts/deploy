@@ -2,15 +2,24 @@
 
 set -euo pipefail
 
-SHA="$(git rev-parse HEAD)"
+SHA="${BUILDKITE_COMMIT:-$(git rev-parse HEAD)}"
 
-env
+STAGE_NAME="${STAGE_NAME:-development}"
 
 PARAMETER_OVERRIDES=''
+PARAMETER_OVERRIDES="$PARAMETER_OVERRIDES ParameterKey=StageName,ParameterValue=$STAGE_NAME"
 PARAMETER_OVERRIDES="$PARAMETER_OVERRIDES ParameterKey=SHA,ParameterValue=$SHA}"
 PARAMETER_OVERRIDES="$PARAMETER_OVERRIDES ParameterKey=XHoneycombTeam,ParameterValue=$X_HONEYCOMB_TEAM"
+
+set +u
+if [ -z "$CI" ]; then
+  STACK_NAME="${STACK_NAME:-beacon}"
+fi
+set -u
 
 sam deploy \
  --config-file $(pwd)/cloudformation/config.toml \
  --template-file $(pwd)/cloudformation/template.yml \
- --parameter-overrides "$PARAMETER_OVERRIDES"
+ --parameter-overrides "$PARAMETER_OVERRIDES" \
+ --s3-prefix="default/$SHA" \
+ --stack-name="${STACK_NAME:-$CI_STACK_NAME}"

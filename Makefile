@@ -110,27 +110,33 @@ define GEN_INTERMEDIATE
 .tmp/functions/$(PACKAGE)/index.js .tmp/functions/$(PACKAGE)/index.js.map &: $(call compute_deps_for_package,$(PACKAGE))
 	$(NPX) esbuild --bundle --outfile=$$(@) --format=cjs --external:'@opentelemetry*' --platform=node --sourcemap '$$(PACKAGE_PATH)'
 
-.tmp/functions/$(PACKAGE)/collector.yaml: OUT_DIR=$(PACKAGE)
 .tmp/functions/$(PACKAGE)/collector.yaml: cloudformation/opentelemetry.yml
-	mkdir --parents .tmp/functions/$$(OUT_DIR)
+	mkdir --parents .tmp/functions/$(PACKAGE)
 	cp $$< $$@
 
-.tmp/functions/$(PACKAGE)/telemetry.js: OUT_DIR=$(PACKAGE)
 .tmp/functions/$(PACKAGE)/telemetry.js: $(PACKAGES_DIR)/@beacon/telemetry/src/include.ts
-	mkdir --parents .tmp/functions/$$(OUT_DIR)
+	mkdir --parents .tmp/functions/$(PACKAGE)
 	$(NPX) esbuild --bundle --outfile=$$(@) --format=cjs --external:'@opentelemetry*' --platform=node --sourcemap '$$(<)'
 
 endef
 $(foreach PACKAGE,$(LAMBDA_FUNCTION_PACKAGES),$(eval $(GEN_INTERMEDIATE)))
 
 $(LAMBDA_OUTPUT_PATHS) &: $(LAMBDA_INTERMEDIATE_PATHS) $(wildcard cloudformation/*) .tmp/nodejs.zip
-	 sam build \
-	 --config-file $$(pwd)/cloudformation/config.toml \
-	 --template-file $$(pwd)/cloudformation/template.yml
+	sam build \
+		--config-file $$(pwd)/cloudformation/config.toml \
+		--template-file $$(pwd)/cloudformation/template.yml
+	# I don't know why this touch is necessary, but withotu it, Make never sees
+	# the outputs as being up to date.
+	touch $(LAMBDA_OUTPUT_PATHS)
 
 .tmp/sentinel/deploy: $(LAMBDA_OUTPUT_PATHS) .tmp/nodejs.zip | $(SENTINEL_DIR)
 	chamber exec $(CHAMBER) -- ./scripts/deploy
 	@touch $@
+
+destroy:
+	rm -rf .tmp/sentinel/deploy
+	./scripts/destroy
+.PHONY: destroy
 
 ###############################################################################
 ## Targets

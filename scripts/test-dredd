@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+# shellcheck source=../../utilities
+source .buildkite/utilities
+
+export NODE_ENV=test
+
+make dredd.yml
+set +e
+mkdir -p reports/logs
+chamber exec beacon -- \
+  npx --no-install dredd \
+  --config dredd.yml \
+  --path apiary.apib | tee reports/logs/dredd.log
+EXIT_CODE=$?
+set -e
+
+URL=$(awk '/See results in Apiary at/ {print $NF}' reports/logs/dredd.log)
+
+STYLE=
+if [ $EXIT_CODE -eq 0 ]; then
+  STYLE=success
+else
+  STYLE=error
+fi
+
+cat << EOT | buildkite-agent annotate --context "$BUILDKITE_JOB_ID" --style $STYLE
+See your [Dredd results at apiary]($URL).
+EOT
+
+exit $EXIT_CODE

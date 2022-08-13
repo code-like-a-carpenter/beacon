@@ -1,0 +1,10 @@
+steps:
+  - label: ':junit: Process Reports'
+    <<: *step
+    allow_dependency_failure: false
+    command: exit 0
+    depends_on: [ $DEPENDS_ON ]
+    key: process-reports
+    plugins:
+      - junit-annotate#v2.0.2:
+          artifacts: 'reports/junit/*.xml'
