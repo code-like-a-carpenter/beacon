@@ -2,6 +2,10 @@ AWSTemplateFormatVersion: '2010-09-09'
 Transform: 'AWS::Serverless-2016-10-31'
 
 Parameters:
+  DomainName:
+    Type: String
+    Default: 'playground.beacon.codelikeacarpenter.com'
+
   LogRetention:
     Type: Number
     Default: '3'
@@ -32,6 +36,11 @@ Conditions:
   IsDev: !Equals
     - !Ref StageName
     - development
+
+  IsNotTest: !Not
+    - !Equals
+      - !Ref StageName
+      - test
 
 Globals:
   Function:
@@ -113,6 +122,163 @@ Resources:
       # Need to include the stack name because layer names are global.
       LayerName: !Sub dependencies-${AWS::StackName}
       RetentionPolicy: Delete
+
+  ##############################################################################
+  # DNS
+  ##############################################################################
+
+  # I don't really like this setup, but I haven't found a better way to make it
+  # work. This assume that development, test, and prod are all separate accounts
+  # and that that root domain (and its hosted zone) are managed by a fourth
+  # account
+  # Problem #1: Stack Update will be stuck until Zone's name servers are entered
+  # into the hosted zone for the main domain. Something like
+  # !Ref DomainName NS ${NameServers}
+  # Unfortunately, there's no way to automate that without a separate stack, a
+  # far more complex build pipeline, and (probably) a bunch of aws cli calls to
+  # interrogate Zone's name servers.
+  # Problem #2: If this were being deployed to a top level domain, it wouldn't
+  # work. There doesn't appear to be anyway to delegate a top-level domain, so
+  # the prod account would have to do the delegation to the other accounts. Such
+  # a setup might actually let us put nearly everything into this cloudformation
+  # template, but it would still be tedious. For one, we'd need to do a few
+  # deployment passes. First, we'd need to just create Zone's in each account.
+  # Then, we'd need to come up with a way for the prod deployment job to find
+  # out the name servers for the other accounts. The we could add the delegation
+  # records to the prod account. Finally,  we could add in the rest of the
+  # resources.
+  # Problem #3: Since we need a way to communicate the Zone's name servers to
+  # the management account, we can't actually run any of this in test. For
+  # something like this to work in test, we'd need to create a permanent Zone
+  # in the test account using CloudFormation or terraform.
+
+  Zone:
+    Type: AWS::Route53::HostedZone
+    Condition: IsNotTest
+    Properties:
+      Name: !Ref DomainName
+
+  Certificate:
+    Type: AWS::CertificateManager::Certificate
+    Condition: IsNotTest
+    Properties:
+      DomainName: !Ref DomainName
+      DomainValidationOptions:
+        - DomainName: !Ref DomainName
+          HostedZoneId: !Ref Zone
+        - DomainName: !Sub "api.${DomainName}"
+          HostedZoneId: !Ref Zone
+        - DomainName: !Sub "www.${DomainName}"
+          HostedZoneId: !Ref Zone
+      SubjectAlternativeNames:
+        - !Sub "api.${DomainName}"
+        - !Sub "www.${DomainName}"
+      ValidationMethod: DNS
+
+  ApiDomainName:
+    Type: AWS::ApiGateway::DomainName
+    Condition: IsNotTest
+    Properties:
+      CertificateArn: !Ref Certificate
+      DomainName: !Sub 'api.${DomainName}'
+      EndpointConfiguration:
+        Types:
+          - EDGE
+
+  ApiBasePathMapping:
+    Type: 'AWS::ApiGateway::BasePathMapping'
+    Condition: IsNotTest
+    Properties:
+      DomainName: !Ref ApiDomainName
+      RestApiId: !Ref Api
+      Stage: !Ref Api.Stage
+
+  ApiRoute53RecordSetGroup:
+    Type: AWS::Route53::RecordSetGroup
+    Condition: IsNotTest
+    Properties:
+      HostedZoneId: !Ref Zone
+      RecordSets:
+        - Name: !Sub 'api.${DomainName}'
+          Type: A
+          AliasTarget:
+            HostedZoneId: !GetAtt ApiDomainName.DistributionHostedZoneId
+            DNSName: !GetAtt ApiDomainName.DistributionDomainName
+        - Name: !Sub 'api.${DomainName}'
+          Type: AAAA
+          AliasTarget:
+            HostedZoneId: !GetAtt ApiDomainName.DistributionHostedZoneId
+            DNSName: !GetAtt ApiDomainName.DistributionDomainName
+
+  RootDomainName:
+    Type: AWS::ApiGateway::DomainName
+    Condition: IsNotTest
+    Properties:
+      CertificateArn: !Ref Certificate
+      DomainName: !Ref DomainName
+      EndpointConfiguration:
+        Types:
+          - EDGE
+
+  RootBasePathMapping:
+    Type: 'AWS::ApiGateway::BasePathMapping'
+    Condition: IsNotTest
+    Properties:
+      DomainName: !Ref RootDomainName
+      RestApiId: !Ref Api
+      Stage: !Ref Api.Stage
+
+  RootRoute53RecordSetGroup:
+    Type: AWS::Route53::RecordSetGroup
+    Condition: IsNotTest
+    Properties:
+      HostedZoneId: !Ref Zone
+      RecordSets:
+        - Name: !Sub '${DomainName}'
+          Type: A
+          AliasTarget:
+            HostedZoneId: !GetAtt RootDomainName.DistributionHostedZoneId
+            DNSName: !GetAtt RootDomainName.DistributionDomainName
+        - Name: !Sub '${DomainName}'
+          Type: AAAA
+          AliasTarget:
+            HostedZoneId: !GetAtt RootDomainName.DistributionHostedZoneId
+            DNSName: !GetAtt RootDomainName.DistributionDomainName
+
+  WwwDomainName:
+    Type: AWS::ApiGateway::DomainName
+    Condition: IsNotTest
+    Properties:
+      CertificateArn: !Ref Certificate
+      DomainName: !Sub 'www.${DomainName}'
+      EndpointConfiguration:
+        Types:
+          - EDGE
+
+  WwwBasePathMapping:
+    Type: 'AWS::ApiGateway::BasePathMapping'
+    Condition: IsNotTest
+    Properties:
+      DomainName: !Ref WwwDomainName
+      RestApiId: !Ref Api
+      Stage: !Ref Api.Stage
+
+  WwwRoute53RecordSetGroup:
+    Type: AWS::Route53::RecordSetGroup
+    Condition: IsNotTest
+    Properties:
+      HostedZoneId: !Ref Zone
+      RecordSets:
+        - Name: !Sub 'www.${DomainName}'
+          Type: A
+          AliasTarget:
+            HostedZoneId: !GetAtt WwwDomainName.DistributionHostedZoneId
+            DNSName: !GetAtt WwwDomainName.DistributionDomainName
+        - Name: !Sub 'www.${DomainName}'
+          Type: AAAA
+          AliasTarget:
+            HostedZoneId: !GetAtt WwwDomainName.DistributionHostedZoneId
+            DNSName: !GetAtt WwwDomainName.DistributionDomainName
 
   ##############################################################################
   # Endpoint Lambdas
