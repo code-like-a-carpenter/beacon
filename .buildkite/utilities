@@ -167,6 +167,12 @@ init_utilities () {
   export CI_STACK_NAME
   CI_STACK_NAME=ci--$BUILDKITE_PIPELINE_NAME--$CI_SAFE_BRANCH_NAME--$BUILDKITE_COMMIT
 
+  # Only setup domains on the main branch since it adds _a lot_ of time to the
+  # stack deploy process. We'll test against real domains before a production
+  # deployment, but we'll try to keep PR build time reasonable.
+  if [ "$BUILDKITE_BRANCH" != "$BUILDKITE_PIPELINE_DEFAULT_BRANCH" ]; then
+    export SKIP_DOMAIN_SETUP=yes
+  fi
   local SHORT_SHA=${BUILDKITE_COMMIT:0:10}
   export DOMAIN_NAME="$SHORT_SHA.test.beacon.codelikeacarpenter.com"
   export ZONE_DOMAIN_NAME=test.beacon.codelikeacarpenter.com

@@ -39,6 +39,10 @@ PARAMETER_OVERRIDES="$PARAMETER_OVERRIDES ParameterKey=XHoneycombTeam,ParameterV
 PARAMETER_OVERRIDES="$PARAMETER_OVERRIDES ParameterKey=DomainName,ParameterValue=$DOMAIN_NAME"
 PARAMETER_OVERRIDES="$PARAMETER_OVERRIDES ParameterKey=HostedZoneId,ParameterValue=$HOSTED_ZONE_ID"
 
+# If running in CI and not on the default branch, skip domain-related resources
+if [ -n "${SKIP_DOMAIN_SETUP:-}"  ]; then
+  PARAMETER_OVERRIDES="$PARAMETER_OVERRIDES ParameterKey=SkipDomainSetup,ParameterValue=$SKIP_DOMAIN_SETUP"
+fi
 
 sam deploy \
  --config-file $(pwd)/cloudformation/config.toml \

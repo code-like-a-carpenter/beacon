@@ -2,8 +2,18 @@ AWSTemplateFormatVersion: '2010-09-09'
 Transform: 'AWS::Serverless-2016-10-31'
 
 Parameters:
+  SkipDomainSetup:
+    Type: String
+    Default: AWS::NoValue
+    Description: |
+      Provides an escape hatch to skip domain setup. Domain resources are slow
+      to set up (and even slower to destroy), so they make PR builds very slow,
+      but it's still a good idea to run domain builds on the main branch before
+      a production deploy.
+
   DomainName:
     Type: String
+    Default: AWS::NoValue
     Description: |
       The base domain name for the stack's application. There should already be
       a matching Route53 Hosted Zone in this account matching this domain.
@@ -41,6 +51,10 @@ Conditions:
   IsDev: !Equals
     - !Ref StageName
     - development
+
+  ConfigureDomains: !Equals
+    - !Ref SkipDomainSetup
+    - AWS::NoValue
 
 Globals:
   Function:
@@ -202,6 +216,7 @@ Resources:
 
   Certificate:
     Type: AWS::CertificateManager::Certificate
+    Condition: ConfigureDomains
     Properties:
       DomainName: !Ref DomainName
       DomainValidationOptions:
@@ -218,6 +233,7 @@ Resources:
 
   ApiDomainName:
     Type: AWS::ApiGateway::DomainName
+    Condition: ConfigureDomains
     Properties:
       CertificateArn: !Ref Certificate
       DomainName: !Sub 'api.${DomainName}'
@@ -227,6 +243,7 @@ Resources:
 
   ApiBasePathMapping:
     Type: 'AWS::ApiGateway::BasePathMapping'
+    Condition: ConfigureDomains
     Properties:
       DomainName: !Ref ApiDomainName
       RestApiId: !Ref Api
@@ -234,6 +251,7 @@ Resources:
 
   ApiRoute53RecordSetGroup:
     Type: AWS::Route53::RecordSetGroup
+    Condition: ConfigureDomains
     Properties:
       HostedZoneId: !Ref HostedZoneId
       RecordSets:
@@ -250,6 +268,7 @@ Resources:
 
   RootDomainName:
     Type: AWS::ApiGateway::DomainName
+    Condition: ConfigureDomains
     Properties:
       CertificateArn: !Ref Certificate
       DomainName: !Ref DomainName
@@ -259,6 +278,7 @@ Resources:
 
   RootBasePathMapping:
     Type: 'AWS::ApiGateway::BasePathMapping'
+    Condition: ConfigureDomains
     Properties:
       DomainName: !Ref RootDomainName
       RestApiId: !Ref Api
@@ -266,6 +286,7 @@ Resources:
 
   RootRoute53RecordSetGroup:
     Type: AWS::Route53::RecordSetGroup
+    Condition: ConfigureDomains
     Properties:
       HostedZoneId: !Ref HostedZoneId
       RecordSets:
@@ -282,6 +303,7 @@ Resources:
 
   WwwDomainName:
     Type: AWS::ApiGateway::DomainName
+    Condition: ConfigureDomains
     Properties:
       CertificateArn: !Ref Certificate
       DomainName: !Sub 'www.${DomainName}'
@@ -291,6 +313,7 @@ Resources:
 
   WwwBasePathMapping:
     Type: 'AWS::ApiGateway::BasePathMapping'
+    Condition: ConfigureDomains
     Properties:
       DomainName: !Ref WwwDomainName
       RestApiId: !Ref Api
@@ -298,6 +321,7 @@ Resources:
 
   WwwRoute53RecordSetGroup:
     Type: AWS::Route53::RecordSetGroup
+    Condition: ConfigureDomains
     Properties:
       HostedZoneId: !Ref HostedZoneId
       RecordSets:
