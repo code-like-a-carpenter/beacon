@@ -13,7 +13,11 @@ else
   STACK_NAME=$(toml_to_json cloudformation/config.toml | jq -r .default.global.parameters.stack_name)
 fi
 
-ENDPOINT=$(aws cloudformation describe-stacks --stack-name "$STACK_NAME" | jq -r '.Stacks[0].Outputs[] | select(.OutputKey == "ApiUrl") | .OutputValue')
+if [ -n "${DOMAIN_NAME:-}" ]; then
+  ENDPOINT="https://$DOMAIN_NAME"
+else
+  ENDPOINT=$(aws cloudformation describe-stacks --stack-name "$STACK_NAME" | jq -r '.Stacks[0].Outputs[] | select(.OutputKey == "ApiUrl") | .OutputValue')
+fi
 
 OUT=$(sed -e "s#endpoint.*#endpoint: $ENDPOINT#" dredd.yml.tpl)
 if [ -n "${BUILDKITE_JOB_ID:-}" ]; then
