@@ -21,25 +21,39 @@ has_buildkite_agent () {
 
 # Gets added to the top of every file sent to buildkite using pipeline()
 #
-# First, itlooks for all the environment variables matching the listed prefixes
+# First, it looks for all the environment variables matching the listed prefixes
 # and configures them to pass through to the docker container.
 #
 # Then, it loads the _header.yml file from the pipelines directory
 #
 header () {
+  local current_environment_variables=$(list_environment_variables)
+
+  local difference=$(diff  <(echo "$current_environment_variables") <(echo "$INITIAL_ENVIRONMENT_VARIABLES"))
+
+  # First, pass-through all the AWS and BUILDKITE environment variables that
+  # were set before this script ran
+  #
+  # Then, assign all the new exports that we created here.
+  #
+  # Finally, pass-through the CI variable
+  #
+  # Note that this pattern _does_ lead to setting the template vars (the ones
+  # set in the `upload` script) as environment variables, but I _think_ that
+  # should be ok.
   cat << EOT
 docker_compose_environment: &docker_compose_environment
-  - AWS_DEFAULT_REGION
-$(env | awk -F= '/^AWS_/ {print "  - " $1}')
-$(env | awk -F= '/^BUILDKITE/ {print "  - " $1}')
-$(env | awk -F= '/^CHECK_RUN_REPORTER_/ {print "  - " $1 "=$" $1}')
-$(env | awk -F= '/^CI_/ {print "  - " $1 "=$" $1}')
-$(env | awk -F= '/^SAM_/ {print "  - " $1 "=$" $1}')
+$(echo "$INITIAL_ENVIRONMENT_VARIABLES" | awk '/^AWS_/ {print "  - " $1}')
+$(echo "$INITIAL_ENVIRONMENT_VARIABLES" | awk '/^BUILDKITE/ {print "  - " $1}')
+$(echo "$difference" | awk '/^</ {print "  - " $2 "=$" $2}')
   - CI
-  - DEBUG
 
 $(template < "$__DIRNAME/pipelines/_header.yml")
 EOT
+}
+
+list_environment_variables () {
+  env | awk -F= '{print $1}' | grep -v '^_' | sort
 }
 
 # Public: Echos to stderr instead of stdout to avoid polluting the pipeline yml
@@ -107,6 +121,8 @@ upload () {
 }
 
 init_utilities () {
+  INITIAL_ENVIRONMENT_VARIABLES=$(list_environment_variables)
+
   export CHECK_RUN_REPORTER_REPO_TOKEN='1a626bae-dbc9-4f82-9848-f71dd5be9ae6'
 
   # Turn off spyware
