@@ -12,6 +12,8 @@ main () {
   pipeline build.yml
   pipeline lint.yml
 
+  export STAGE_NAME='test'
+
   export DEPENDS_ON='build'
   # Explicitly set maxWorkers; jest determines the max to be 1 which has a lot of
   # surprising side effects (like causing nock to disable the network in
