@@ -90,6 +90,15 @@ EOT
 upload () {
   local pipeline="$1"
 
+  # Only do this in CI so we don't end up with a rogue file when running
+  # locally. Locally, we'll print to stdout, so we can write to file if needed.
+  if [ -n "${CI:-}" ]; then
+    # Make sure pipeline.generated.yml
+    touch pipeline.generated.yml
+    # Append to pipeline.generated.yml so that the job export it as an artifact.
+    echo "$pipeline" >> pipeline.generated.yml
+  fi
+
   if has_buildkite_agent; then
     echo "$pipeline" | buildkite-agent pipeline upload
   else
