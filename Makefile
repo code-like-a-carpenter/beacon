@@ -58,7 +58,6 @@ compute_deps_for_package = $(shell $(CLI) compute-deps-for-package $(1))
 
 PACKAGES_DIR             := packages
 SENTINEL_DIR             := .tmp/sentinel
-SAM_CONFIG_ENV           ?= default
 CHAMBER                  ?= beacon
 
 PACKAGES                  := $(subst $(PACKAGES_DIR)/,,$(wildcard $(PACKAGES_DIR)/*/*))
