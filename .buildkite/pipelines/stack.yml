@@ -5,6 +5,9 @@ steps:
     depends_on:
       - build
     key: sam-deploy
+    # This step takes a while on the main branch because we
+    # provision/deprovision DNS records and ACM certificates
+    timeout: 30
 
   - label: ':cloudformation: destroy'
     <<: *step
@@ -12,3 +15,6 @@ steps:
     command: make destroy
     depends_on: [ build, sam-deploy, $DESTROY_DEPENDS_ON ]
     key: sam-destroy
+    # This step takes a while on the main branch because we
+    # provision/deprovision DNS records and ACM certificates
+    timeout: 30
