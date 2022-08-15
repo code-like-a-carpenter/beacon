@@ -9,12 +9,12 @@ __DIRNAME=$(dirname "$__FILENAME")
 source "$__DIRNAME/utilities"
 
 main () {
+  export STAGE_NAME='test'
+  export DEPENDS_ON='build'
+
   pipeline build.yml
   pipeline lint.yml
 
-  export STAGE_NAME='test'
-
-  export DEPENDS_ON='build'
   # Explicitly set maxWorkers; jest determines the max to be 1 which has a lot of
   # surprising side effects (like causing nock to disable the network in
   # integration tests)
@@ -31,9 +31,19 @@ main () {
     KEY=test-contract \
     pipeline test.yml
 
-  DESTROY_DEPENDS_ON='test-contract' pipeline stack.yml
+  DESTROY_DEPENDS_ON='test-contract' \
+    pipeline stack-test.yml
 
-  DEPENDS_ON="$DEPENDS_ON, lint, test-contract, test-unit" pipeline process-reports.yml
+  DEPENDS_ON="$DEPENDS_ON, lint, test-contract, test-unit" \
+    pipeline process-reports.yml
+
+  DOMAIN_NAME="beacon.codelikeacarpenter.com" \
+    DEPENDS_ON="$DEPENDS_ON, process-reports" \
+    STACK_NAME='beacon' \
+    STAGE_NAME='production' \
+    ZONE_DOMAIN_NAME="beacon.codelikeacarpenter.com" \
+    SETUP_DOMAINS=yes \
+    pipeline stack-production.yml
 }
 
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then

@@ -1,0 +1,13 @@
+steps:
+  - label: ':cloudformation: deploy (prod)'
+    <<: *step
+    agents:
+      queue: "beacon-production"
+    command: make deploy
+    depends_on: [ $DEPENDS_ON ]
+    if: "build.branch == 'master'"
+    key: sam-deploy-production
+    # This step takes a while on the first run because it has to
+    # provision/deprovision DNS records and ACM certificates. Subsequent runs
+    # should be much faster
+    timeout: 30

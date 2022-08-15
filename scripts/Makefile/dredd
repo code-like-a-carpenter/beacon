@@ -13,7 +13,7 @@ else
   STACK_NAME=$(toml_to_json cloudformation/config.toml | jq -r .default.global.parameters.stack_name)
 fi
 
-if [ -n "${DOMAIN_NAME:-}" ] && [ -z "${SKIP_DOMAIN_SETUP:-}" ]; then
+if [ -n "${DOMAIN_NAME:-}" ] && [ "${SETUP_DOMAINS:-}" == 'yes' ]; then
   ENDPOINT="https://$DOMAIN_NAME"
 else
   ENDPOINT=$(aws cloudformation describe-stacks --stack-name "$STACK_NAME" | jq -r '.Stacks[0].Outputs[] | select(.OutputKey == "ApiUrl") | .OutputValue')

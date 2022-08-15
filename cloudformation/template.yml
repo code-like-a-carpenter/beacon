@@ -2,15 +2,6 @@ AWSTemplateFormatVersion: '2010-09-09'
 Transform: 'AWS::Serverless-2016-10-31'
 
 Parameters:
-  SkipDomainSetup:
-    Type: String
-    Default: AWS::NoValue
-    Description: |
-      Provides an escape hatch to skip domain setup. Domain resources are slow
-      to set up (and even slower to destroy), so they make PR builds very slow,
-      but it's still a good idea to run domain builds on the main branch before
-      a production deploy.
-
   DomainName:
     Type: String
     Default: AWS::NoValue
@@ -25,6 +16,15 @@ Parameters:
 
   HostedZoneId:
     Type: String
+
+  SetupDomains:
+    Type: String
+    Default: 'yes'
+    Description: |
+      Provides an escape hatch to skip domain setup. Domain resources are slow
+      to set up (and even slower to destroy), so they make PR builds very slow,
+      but it's still a good idea to run domain builds on the main branch before
+      a production deploy.
 
   StageName:
     Type: String
@@ -53,8 +53,8 @@ Conditions:
     - development
 
   ConfigureDomains: !Equals
-    - !Ref SkipDomainSetup
-    - AWS::NoValue
+    - !Ref SetupDomains
+    - 'yes'
 
 Globals:
   Function:
