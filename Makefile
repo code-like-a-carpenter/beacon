@@ -58,7 +58,6 @@ compute_deps_for_package = $(shell $(CLI) compute-deps-for-package $(1))
 
 PACKAGES_DIR             := packages
 SENTINEL_DIR             := .tmp/sentinel
-SAM_CONFIG_ENV           ?= default
 CHAMBER                  ?= beacon
 
 PACKAGES                  := $(subst $(PACKAGES_DIR)/,,$(wildcard $(PACKAGES_DIR)/*/*))
@@ -155,6 +154,9 @@ dependencies/nodejs/package-lock.json: dependencies/nodejs/package.json
 
 dredd.yml: dredd.yml.tpl cloudformation/config.toml scripts/Makefile/dredd
 	scripts/Makefile/dredd $< > $@
+	mkdir -p reports/config
+	cp $@ reports/config/$@
+
 
 packages/@beacon/gateway-schema/src/__generated__/index.ts: cloudformation/api.yml
 	$(NPX) openapi-typescript $< --prettier-config ./.prettierrc --output $@

@@ -2,20 +2,43 @@
 
 set -euo pipefail
 
+get_hosted_zone_id () {
+  local hostname="$1"
+
+  # First, list all zones
+  # Then, return the Id of the zone that matches the hostname
+  # and finally, trim off the prefix since AWS seends back an Id field that's
+  # more than just the usable Id
+  aws route53 list-hosted-zones | jq -r ".HostedZones[] | select(.Name | contains(\"$hostname\")) | .Id" | awk -F/ '{print $NF}'
+}
+
 SHA="${BUILDKITE_COMMIT:-$(git rev-parse HEAD)}"
 
 STAGE_NAME="${STAGE_NAME:-development}"
+
+if [ -z "${CI:-}" ]; then
+  DOMAIN_NAME="${DOMAIN_NAME:playground.beacon.codelikeacarpenter.com}"
+  STACK_NAME="${STACK_NAME:-beacon}"
+fi
+
+ZONE_DOMAIN_NAME=${ZONE_DOMAIN_NAME:-$DOMAIN_NAME}
+
+HOSTED_ZONE_ID=$(get_hosted_zone_id "$ZONE_DOMAIN_NAME")
+
+if [ -z "$HOSTED_ZONE_ID" ]; then
+  echo "Could not find hosted zone for $ZONE_DOMAIN_NAME"
+  echo "DOMAIN_NAME: $DOMAIN_NAME"
+  echo "SHA: $SHA"
+  exit 1
+fi
 
 PARAMETER_OVERRIDES=''
 PARAMETER_OVERRIDES="$PARAMETER_OVERRIDES ParameterKey=StageName,ParameterValue=$STAGE_NAME"
 PARAMETER_OVERRIDES="$PARAMETER_OVERRIDES ParameterKey=SHA,ParameterValue=$SHA}"
 PARAMETER_OVERRIDES="$PARAMETER_OVERRIDES ParameterKey=XHoneycombTeam,ParameterValue=$X_HONEYCOMB_TEAM"
-
-set +u
-if [ -z "$CI" ]; then
-  STACK_NAME="${STACK_NAME:-beacon}"
-fi
-set -u
+PARAMETER_OVERRIDES="$PARAMETER_OVERRIDES ParameterKey=DomainName,ParameterValue=$DOMAIN_NAME"
+PARAMETER_OVERRIDES="$PARAMETER_OVERRIDES ParameterKey=HostedZoneId,ParameterValue=$HOSTED_ZONE_ID"
+PARAMETER_OVERRIDES="$PARAMETER_OVERRIDES ParameterKey=SetupDomains,ParameterValue=${SETUP_DOMAINS:-no}"
 
 sam deploy \
  --config-file $(pwd)/cloudformation/config.toml \

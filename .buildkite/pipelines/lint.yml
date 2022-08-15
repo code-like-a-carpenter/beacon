@@ -4,8 +4,7 @@ steps:
     artifact_paths:
       - 'reports/**/*'
     command: ./scripts/lint
-    depends_on:
-      - build
+    depends_on: [ $DEPENDS_ON ]
     key: lint
     plugins:
       - ecr#v2.2.0: *plugins_ecr

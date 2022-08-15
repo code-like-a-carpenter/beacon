@@ -1,58 +1,19 @@
 #!/usr/bin/env bash
 
-export CHECK_RUN_REPORTER_REPO_TOKEN='1a626bae-dbc9-4f82-9848-f71dd5be9ae6'
+compute_docker_safe_branch_name () {
+  local branch_name="$1"
 
-# Make sure that __DIRNAME is the fully qualified path to the directory where
-# this script is located.
-__DIRNAME=${__DIRNAME:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}
+  # Docker tags cannot includes slashes
+  branch_name=${branch_name//\//-}
+  # Docker tags cannot includes @ signs
+  branch_name=${branch_name/@/-}
+  # Stack names cannot includes underscores
+  branch_name=${branch_name//_/-}
+  # Stack names cannot includes periods
+  branch_name=${branch_name//\./-}
 
-# If not running in CI, use local values and/or fallbacks so that we can print
-# the output from the command line for debugging.
-if [ -z "${CI:-}" ]; then
-  BUILDKITE_BRANCH=${BUILDKITE_BRANCH:-$(git rev-parse --abbrev-ref HEAD)}
-  BUILDKITE_PLUGIN_DOCKER_COMPOSE_IMAGE_REPOSITORY=${BUILDKITE_PLUGIN_DOCKER_COMPOSE_IMAGE_REPOSITORY:-fake_repository_name}
-  BUILDKITE_PIPELINE_DEFAULT_BRANCH=${BUILDKITE_PIPELINE_DEFAULT_BRANCH:-main}
-  BUILDKITE_PIPELINE_NAME=${BUILDKITE_PIPELINE_NAME:-fake_pipeline_name}
-  BUILDKITE_COMMIT=${BUILDKITE_COMMIT:-$(git rev-parse HEAD)}
-fi
-
-# Docker tags cannot includes slashes
-CI_SAFE_BRANCH_NAME=${BUILDKITE_BRANCH//\//-}
-# Docker tags cannot includes @ signs
-CI_SAFE_BRANCH_NAME=${CI_SAFE_BRANCH_NAME/@/-}
-# Stack names cannot includes underscores
-CI_SAFE_BRANCH_NAME=${CI_SAFE_BRANCH_NAME//_/-}
-# Stack names cannot includes periods
-CI_SAFE_BRANCH_NAME=${CI_SAFE_BRANCH_NAME//\./-}
-
-# The ECR repository name of the main branch Docker image
-export CI_DOCKER_COMPOSE_IMAGE_MAIN_TAG
-CI_DOCKER_COMPOSE_IMAGE_MAIN_TAG="$BUILDKITE_PLUGIN_DOCKER_COMPOSE_IMAGE_REPOSITORY:$BUILDKITE_PIPELINE_DEFAULT_BRANCH"
-
-# The ECR repository name of current branch Docker image
-export CI_DOCKER_COMPOSE_IMAGE_BRANCH_TAG
-CI_DOCKER_COMPOSE_IMAGE_BRANCH_TAG="$BUILDKITE_PLUGIN_DOCKER_COMPOSE_IMAGE_REPOSITORY:$CI_SAFE_BRANCH_NAME"
-
-export CI_STACK_PREFIX
-CI_STACK_PREFIX=ci--$CI_SAFE_BRANCH_NAME
-
-# The name of the CloudFormation stack that'll be deployed for testing. It needs
-# to be unique to so that other jobs don't collide with it and so that, if
-# someone pushes a new commit for this branch when 1. the stack failed to deploy
-# and 2. the stack was not cleaned up, the next job won't fail because the stack
-# is in an unrecoverable state. While the commit is probably enough to guarantee
-# that uniqueness, having the branch makes it much easier to interpret the
-# stacks in the CloudFormation UI.
-export CI_STACK_NAME
-CI_STACK_NAME=ci--$BUILDKITE_PIPELINE_NAME--$CI_SAFE_BRANCH_NAME--$BUILDKITE_COMMIT
-
-# Turn off spyware
-export SAM_CLI_TELEMETRY
-SAM_CLI_TELEMETRY=0
-
-# Print debug logs from the axios client used by the Check Run Reporter plugin
-export DEBUG
-DEBUG=axios
+  echo $branch_name
+}
 
 has_buildkite_agent () {
   command -v buildkite-agent > /dev/null 2>&1
@@ -60,25 +21,39 @@ has_buildkite_agent () {
 
 # Gets added to the top of every file sent to buildkite using pipeline()
 #
-# First, itlooks for all the environment variables matching the listed prefixes
+# First, it looks for all the environment variables matching the listed prefixes
 # and configures them to pass through to the docker container.
 #
 # Then, it loads the _header.yml file from the pipelines directory
 #
 header () {
+  local current_environment_variables=$(list_environment_variables)
+
+  local difference=$(diff  <(echo "$current_environment_variables") <(echo "$INITIAL_ENVIRONMENT_VARIABLES"))
+
+  # First, pass-through all the AWS and BUILDKITE environment variables that
+  # were set before this script ran
+  #
+  # Then, assign all the new exports that we created here.
+  #
+  # Finally, pass-through the CI variable
+  #
+  # Note that this pattern _does_ lead to setting the template vars (the ones
+  # set in the `upload` script) as environment variables, but I _think_ that
+  # should be ok.
   cat << EOT
 docker_compose_environment: &docker_compose_environment
-  - AWS_DEFAULT_REGION
-$(env | awk -F= '/^AWS_/ {print "  - " $1}')
-$(env | awk -F= '/^BUILDKITE/ {print "  - " $1}')
-$(env | awk -F= '/^CHECK_RUN_REPORTER_/ {print "  - " $1 "=$" $1}')
-$(env | awk -F= '/^CI_/ {print "  - " $1 "=$" $1}')
-$(env | awk -F= '/^SAM_/ {print "  - " $1 "=$" $1}')
+$(echo "$INITIAL_ENVIRONMENT_VARIABLES" | awk '/^AWS_/ {print "  - " $1}')
+$(echo "$INITIAL_ENVIRONMENT_VARIABLES" | awk '/^BUILDKITE/ {print "  - " $1}')
+$(echo "$difference" | awk '/^</ {print "  - " $2 "=$" $2}')
   - CI
-  - DEBUG
 
 $(template < "$__DIRNAME/pipelines/_header.yml")
 EOT
+}
+
+list_environment_variables () {
+  env | awk -F= '{print $1}' | grep -v '^_' | sort
 }
 
 # Public: Echos to stderr instead of stdout to avoid polluting the pipeline yml
@@ -129,11 +104,86 @@ EOT
 upload () {
   local pipeline="$1"
 
+  # Only do this in CI so we don't end up with a rogue file when running
+  # locally. Locally, we'll print to stdout, so we can write to file if needed.
+  if [ -n "${CI:-}" ]; then
+    # Make sure pipeline.generated.yml
+    touch pipeline.generated.yml
+    # Append to pipeline.generated.yml so that the job export it as an artifact.
+    echo "$pipeline" >> pipeline.generated.yml
+  fi
+
   if has_buildkite_agent; then
     echo "$pipeline" | buildkite-agent pipeline upload
   else
     echo "$pipeline"
   fi
+}
+
+init_utilities () {
+  INITIAL_ENVIRONMENT_VARIABLES=$(list_environment_variables)
+
+  export CHECK_RUN_REPORTER_REPO_TOKEN='1a626bae-dbc9-4f82-9848-f71dd5be9ae6'
+
+  # Turn off spyware
+  export SAM_CLI_TELEMETRY
+  SAM_CLI_TELEMETRY=0
+
+  # Print debug logs from the axios client used by the Check Run Reporter plugin
+  export DEBUG
+  DEBUG=axios
+
+  # Make sure that __DIRNAME is the fully qualified path to the directory where
+  # this script is located.
+  __DIRNAME=${__DIRNAME:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}
+
+  # If not running in CI, use local values and/or fallbacks so that we can print
+  # the output from the command line for debugging.
+  if [ -z "${CI:-}" ]; then
+    log "This does not appear to be a CI build. Setting defaults for local execution"
+    set_local_defaults
+  fi
+
+  CI_SAFE_BRANCH_NAME="$(compute_docker_safe_branch_name $BUILDKITE_BRANCH)"
+
+  # The ECR repository name of the main branch Docker image
+  export CI_DOCKER_COMPOSE_IMAGE_MAIN_TAG
+  CI_DOCKER_COMPOSE_IMAGE_MAIN_TAG="$BUILDKITE_PLUGIN_DOCKER_COMPOSE_IMAGE_REPOSITORY:$BUILDKITE_PIPELINE_DEFAULT_BRANCH"
+
+  # The ECR repository name of current branch Docker image
+  export CI_DOCKER_COMPOSE_IMAGE_BRANCH_TAG
+  CI_DOCKER_COMPOSE_IMAGE_BRANCH_TAG="$BUILDKITE_PLUGIN_DOCKER_COMPOSE_IMAGE_REPOSITORY:$CI_SAFE_BRANCH_NAME"
+
+  export CI_STACK_PREFIX
+  CI_STACK_PREFIX=ci--$CI_SAFE_BRANCH_NAME
+
+  # The name of the CloudFormation stack that'll be deployed for testing. It needs
+  # to be unique to so that other jobs don't collide with it and so that, if
+  # someone pushes a new commit for this branch when 1. the stack failed to deploy
+  # and 2. the stack was not cleaned up, the next job won't fail because the stack
+  # is in an unrecoverable state. While the commit is probably enough to guarantee
+  # that uniqueness, having the branch makes it much easier to interpret the
+  # stacks in the CloudFormation UI.
+  export CI_STACK_NAME
+  CI_STACK_NAME=ci--$BUILDKITE_PIPELINE_NAME--$CI_SAFE_BRANCH_NAME--$BUILDKITE_COMMIT
+
+  # Only setup domains on the main branch since it adds _a lot_ of time to the
+  # stack deploy process. We'll test against real domains before a production
+  # deployment, but we'll try to keep PR build time reasonable.
+  if [ "$BUILDKITE_BRANCH" != "$BUILDKITE_PIPELINE_DEFAULT_BRANCH" ]; then
+    export SETUP_DOMAINS=no
+  fi
+  local SHORT_SHA=${BUILDKITE_COMMIT:0:10}
+  export DOMAIN_NAME="$SHORT_SHA.test.beacon.codelikeacarpenter.com"
+  export ZONE_DOMAIN_NAME=test.beacon.codelikeacarpenter.com
+}
+
+set_local_defaults () {
+  BUILDKITE_BRANCH=${BUILDKITE_BRANCH:-$(git rev-parse --abbrev-ref HEAD)}
+  BUILDKITE_PLUGIN_DOCKER_COMPOSE_IMAGE_REPOSITORY=${BUILDKITE_PLUGIN_DOCKER_COMPOSE_IMAGE_REPOSITORY:-fake_repository_name}
+  BUILDKITE_PIPELINE_DEFAULT_BRANCH=${BUILDKITE_PIPELINE_DEFAULT_BRANCH:-main}
+  BUILDKITE_PIPELINE_NAME=${BUILDKITE_PIPELINE_NAME:-fake_pipeline_name}
+  BUILDKITE_COMMIT=${BUILDKITE_COMMIT:-$(git rev-parse HEAD)}
 }
 
 # Public: Substitutes environment variables into stdin
@@ -161,3 +211,5 @@ template () {
     return 1
   fi
 }
+
+init_utilities

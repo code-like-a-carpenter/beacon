@@ -2,10 +2,29 @@ AWSTemplateFormatVersion: '2010-09-09'
 Transform: 'AWS::Serverless-2016-10-31'
 
 Parameters:
+  DomainName:
+    Type: String
+    Default: AWS::NoValue
+    Description: |
+      The base domain name for the stack's application. There should already be
+      a matching Route53 Hosted Zone in this account matching this domain.
+
   LogRetention:
     Type: Number
     Default: '3'
     Description: Duration in days to retain logs
+
+  HostedZoneId:
+    Type: String
+
+  SetupDomains:
+    Type: String
+    Default: 'yes'
+    Description: |
+      Provides an escape hatch to skip domain setup. Domain resources are slow
+      to set up (and even slower to destroy), so they make PR builds very slow,
+      but it's still a good idea to run domain builds on the main branch before
+      a production deploy.
 
   StageName:
     Type: String
@@ -32,6 +51,10 @@ Conditions:
   IsDev: !Equals
     - !Ref StageName
     - development
+
+  ConfigureDomains: !Equals
+    - !Ref SetupDomains
+    - 'yes'
 
 Globals:
   Function:
@@ -113,6 +136,205 @@ Resources:
       # Need to include the stack name because layer names are global.
       LayerName: !Sub dependencies-${AWS::StackName}
       RetentionPolicy: Delete
+
+  ##############################################################################
+  # DNS
+  ##############################################################################
+
+  # In addition to the following DNS config, HostedZones need to be created
+  # outside of CloudFormation. CF doesn't practically support managing resources
+  # in more than one account,
+  #
+  # The following terraform is one way to create those zones
+  #
+  # ```tf
+  # data "aws_route53_zone" "codelikeacarpenter" {
+  #  name = "codelikeacarpenter.com"
+  # }
+  #
+  # resource "aws_route53_zone" "beacon_production" {
+  #   provider = aws.beacon_production
+  #   name     = "beacon.codelikeacarpenter.com"
+  # }
+  #
+  # resource "aws_route53_record" "beacon_production" {
+  #   zone_id = data.aws_route53_zone.codelikeacarpenter.zone_id
+  #   name    = "beacon.codelikeacarpenter.com"
+  #   type    = "NS"
+  #   # Once this all seems to be working, this should be something more like
+  #   # one day instead of five minutes.
+  #   ttl     = "300"
+  #   records = aws_route53_zone.beacon_production.name_servers
+  # }
+  #
+  # resource "aws_route53_zone" "beacon_ci" {
+  #   provider = aws.ci
+  #   name     = "test.beacon.codelikeacarpenter.com"
+  # }
+  #
+  # resource "aws_route53_record" "beacon_ci" {
+  #   zone_id = data.aws_route53_zone.codelikeacarpenter.zone_id
+  #   name    = "test.beacon.codelikeacarpenter.com"
+  #   type    = "NS"
+  #   # This needs more investigation, but the development and test stacks may
+  #   # deploy significantly faster if this ttl is made much lower.
+  #   ttl     = "300"
+  #   records = aws_route53_zone.beacon_ci.name_servers
+  # }
+  #
+  # resource "aws_route53_zone" "beacon_playground" {
+  #   provider = aws.playground
+  #   name     = "playground.beacon.codelikeacarpenter.com"
+  # }
+  #
+  # resource "aws_route53_record" "beacon_playground" {
+  #   zone_id = data.aws_route53_zone.codelikeacarpenter.zone_id
+  #   name    = "playground.beacon.codelikeacarpenter.com"
+  #   type    = "NS"
+  #   # This needs more investigation, but the development and test stacks may
+  #   # deploy significantly faster if this ttl is made much lower.
+  #   ttl     = "300"
+  #   records = aws_route53_zone.beacon_playground.name_servers
+  # }
+  # ```
+  #
+  # This setup seems to address most of the issues of the previous setup.
+  # 1. The zones are persistent and managed outside of CloudFormation, so
+  # there's no need for the manual step of setting up NS records.
+  # 2. There's still an issue if we want to mount this application at the root
+  # of a domain, but that's now an issue to solve externally. For example,
+  # assuming the domain is registered in the management account, but that we're
+  # to serve prod out of a dedicated account, we can use pretty much the same
+  # terraform config as above, but instead of
+  # `data.aws_route53_zone.codelikeacarpenter`, we can use
+  # `aws_route53domains_registered_domain` to delegate the root domain's zone
+  # to the production account, and then use the rest of the resourse to
+  # that zone instead of the mgmt account's root zone. I won't be doing that
+  # here since I don't want to host codelikeacarpenter.com in the beacon prod
+  # account
+  # 3. Now that all the zones are persistent, we can use this setup during tests
+
+  Certificate:
+    Type: AWS::CertificateManager::Certificate
+    Condition: ConfigureDomains
+    Properties:
+      DomainName: !Ref DomainName
+      DomainValidationOptions:
+        - DomainName: !Ref DomainName
+          HostedZoneId: !Ref HostedZoneId
+        - DomainName: !Sub "api.${DomainName}"
+          HostedZoneId: !Ref HostedZoneId
+        - DomainName: !Sub "www.${DomainName}"
+          HostedZoneId: !Ref HostedZoneId
+      SubjectAlternativeNames:
+        - !Sub "api.${DomainName}"
+        - !Sub "www.${DomainName}"
+      ValidationMethod: DNS
+
+  ApiDomainName:
+    Type: AWS::ApiGateway::DomainName
+    Condition: ConfigureDomains
+    Properties:
+      CertificateArn: !Ref Certificate
+      DomainName: !Sub 'api.${DomainName}'
+      EndpointConfiguration:
+        Types:
+          - EDGE
+
+  ApiBasePathMapping:
+    Type: 'AWS::ApiGateway::BasePathMapping'
+    Condition: ConfigureDomains
+    Properties:
+      DomainName: !Ref ApiDomainName
+      RestApiId: !Ref Api
+      Stage: !Ref Api.Stage
+
+  ApiRoute53RecordSetGroup:
+    Type: AWS::Route53::RecordSetGroup
+    Condition: ConfigureDomains
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      RecordSets:
+        - Name: !Sub 'api.${DomainName}'
+          Type: A
+          AliasTarget:
+            HostedZoneId: !GetAtt ApiDomainName.DistributionHostedZoneId
+            DNSName: !GetAtt ApiDomainName.DistributionDomainName
+        - Name: !Sub 'api.${DomainName}'
+          Type: AAAA
+          AliasTarget:
+            HostedZoneId: !GetAtt ApiDomainName.DistributionHostedZoneId
+            DNSName: !GetAtt ApiDomainName.DistributionDomainName
+
+  RootDomainName:
+    Type: AWS::ApiGateway::DomainName
+    Condition: ConfigureDomains
+    Properties:
+      CertificateArn: !Ref Certificate
+      DomainName: !Ref DomainName
+      EndpointConfiguration:
+        Types:
+          - EDGE
+
+  RootBasePathMapping:
+    Type: 'AWS::ApiGateway::BasePathMapping'
+    Condition: ConfigureDomains
+    Properties:
+      DomainName: !Ref RootDomainName
+      RestApiId: !Ref Api
+      Stage: !Ref Api.Stage
+
+  RootRoute53RecordSetGroup:
+    Type: AWS::Route53::RecordSetGroup
+    Condition: ConfigureDomains
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      RecordSets:
+        - Name: !Sub '${DomainName}'
+          Type: A
+          AliasTarget:
+            HostedZoneId: !GetAtt RootDomainName.DistributionHostedZoneId
+            DNSName: !GetAtt RootDomainName.DistributionDomainName
+        - Name: !Sub '${DomainName}'
+          Type: AAAA
+          AliasTarget:
+            HostedZoneId: !GetAtt RootDomainName.DistributionHostedZoneId
+            DNSName: !GetAtt RootDomainName.DistributionDomainName
+
+  WwwDomainName:
+    Type: AWS::ApiGateway::DomainName
+    Condition: ConfigureDomains
+    Properties:
+      CertificateArn: !Ref Certificate
+      DomainName: !Sub 'www.${DomainName}'
+      EndpointConfiguration:
+        Types:
+          - EDGE
+
+  WwwBasePathMapping:
+    Type: 'AWS::ApiGateway::BasePathMapping'
+    Condition: ConfigureDomains
+    Properties:
+      DomainName: !Ref WwwDomainName
+      RestApiId: !Ref Api
+      Stage: !Ref Api.Stage
+
+  WwwRoute53RecordSetGroup:
+    Type: AWS::Route53::RecordSetGroup
+    Condition: ConfigureDomains
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      RecordSets:
+        - Name: !Sub 'www.${DomainName}'
+          Type: A
+          AliasTarget:
+            HostedZoneId: !GetAtt WwwDomainName.DistributionHostedZoneId
+            DNSName: !GetAtt WwwDomainName.DistributionDomainName
+        - Name: !Sub 'www.${DomainName}'
+          Type: AAAA
+          AliasTarget:
+            HostedZoneId: !GetAtt WwwDomainName.DistributionHostedZoneId
+            DNSName: !GetAtt WwwDomainName.DistributionDomainName
 
   ##############################################################################
   # Endpoint Lambdas
